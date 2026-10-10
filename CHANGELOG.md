@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Signal calibration engine** (`tradingview_mcp.core.calibration`) — the
+  answer to "confidence: 87, according to what?". Every smart-money condition is
+  re-expressed as a function over time and measured against the stored EGX
+  history, then reported with the numbers that make a rate falsifiable:
+
+  - event study with no look-ahead (signal on the close of *t*, entry at the
+    open of *t+1*, exit at the close of *t+horizon*);
+  - a base rate — what buying a random stored symbol for the same holding
+    period would have produced — next to every hit rate;
+  - an equal-weighted benchmark over the identical entry/exit dates, so a
+    market-wide move cannot masquerade as a signal;
+  - p-values from a **block permutation** of each symbol's whole return series
+    (blocks preserve momentum and volatility clustering; the statistic is
+    recomputed at the same event positions, so the null is about the signal's
+    *timing*);
+  - **Benjamini–Hochberg** q-values across every signal measured in the run;
+  - **walk-forward** folds with a ROBUST / MODERATE / WEAK / OVERFITTED
+    verdict, where a fold only votes when its in-sample edge and event counts
+    are big enough to be worth retaining;
+  - an explicit verdict per signal: VALIDATED (enough events, positive excess,
+    q ≤ 0.10) / SUGGESTIVE / REJECTED / NO_EVENTS.
+
+  Stdlib only (no numpy/pandas), so it runs directly over the data layer's
+  stored bars; third-party conditions join by registering a `SignalSpec`.
+- **New MCP tools** `egx_signal_calibration` (measure conditions against the
+  local store — read-only, works offline) and `egx_calibration_signals`
+  (catalogue with each signal's hypothesis). 42 tools total.
+- **`scripts/egx_calibrate.py`** — the same engine from the shell, with
+  `--list`, per-signal selection, configurable horizon/permutations/folds, and
+  JSON/Markdown report output.
+- **Distribution mirrors** of all five conditions (the guide asks for a
+  DistributionDetector and only the accumulation side ever shipped), registered
+  so they can be measured like everything else.
+
+### Fixed
+- **The accumulation signal's breakout condition was unsatisfiable.** The
+  legacy `is_above_20d_high` compared the current close against the highest
+  high of a window that *included* the current bar — and a close can never
+  exceed its own session's high. Measured over 4,800 synthetic sessions it was
+  true exactly **zero** times, which made the "5/5 conditions" branch of
+  `AccumulationSignal` (and every `is_high_conviction()` claim) dead code: the
+  maximum reachable condition count was 4. Price-structure levels now come from
+  the window *before* the current bar (a genuine breakout), which makes the
+  condition fire 405 times over the same 4,800 sessions and lets 5/5 signals
+  exist. The original formulation is preserved in the calibration catalogue as
+  `c3_legacy` so the difference stays visible. `tests/unit/services/test_smart_money_core.py`
+  pins both behaviours.
 - **EGX data acquisition & verification layer** (`tradingview_mcp.core.data`).
   The previous EGX data stack was scaffolding: abstract source interfaces with
   no implementation, hard-coded sector/index tables, a key/value SQLite cache,

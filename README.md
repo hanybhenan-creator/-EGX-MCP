@@ -96,6 +96,11 @@ https://github-production-user-asset-6210df.s3.amazonaws.com/67838093/478689497-
 
 ## 🆕 What's New
 
+**Calibrated EGX signal measurement (October 2026)**
+
+- **No more uncalibrated confidence numbers.** The EGX smart-money conditions (POC below price, buy/sell ratio > 1.5, 20-day breakout, OBV/ADL confirmation) are now *measured* against stored history: events, hit rate with a 95% Wilson interval, the sample's base rate, the excess over an equal-weighted benchmark of the same entry/exit dates, a block-permutation p-value, a Benjamini–Hochberg q-value across the whole batch, and contiguous out-of-sample walk-forward folds. Each signal ends with a declared state: VALIDATED / SUGGESTIVE / REJECTED / NO_EVENTS. New tools: `egx_signal_calibration`, `egx_calibration_signals`; new CLI: `scripts/egx_calibrate.py`.
+- **Found and fixed a dead condition.** The breakout condition (`is_above_20d_high`) compared the current close with the highest high of a window that included the current bar — arithmetically unsatisfiable. Over 4,800 sessions it fired zero times, making the "5/5 high conviction" tier unreachable. Levels now come from the prior window; the same 4,800 sessions produce 405 breakouts, and the original formulation stays registered as `c3_legacy` so the calibration report keeps showing the difference.
+
 **EGX Data Acquisition Layer (October 2026)**
 
 - **EGX data layer rebuilt around verifiable provenance** — every value the EGX tools consume now carries its source, fetch time, latency and validation verdicts, and every fetch attempt (success or failure) is recorded. New package `core/data/`: `calendar` (EGX trades Sun–Thu, Africa/Cairo, DST-aware), `provenance`, `transport` (retry/backoff + per-host politeness + an injectable seam that keeps parser tests offline), `html_tables` (stdlib-only table reader that resolves rowspan/colspan so merged headers cannot shift price into volume), `parsing` (Arabic-Indic digits, ٬/٫ separators, `(12.5)` negatives, `1.2M` suffixes), `quality` (hard validity → plausibility flags → cross-source triangulation), `sources/` (egx.com.eg scraper with learned endpoint candidates, Yahoo `.CA` chart, a delegating TradingView adapter), `router` (fallback chain + circuit breakers), `store` (schema-versioned SQLite with per-source observations and a full audit trail) and `ingest` (refresh runs modelled as transactions with reports).
@@ -489,7 +494,7 @@ Example prompt: "Compare all 9 strategies on MSFT for 2 years"
 | **Binance** | Crypto screener, all pairs |
 | **KuCoin / Bybit+** | Crypto screener |
 | **NASDAQ / NYSE** | US stocks (AAPL, TSLA, NVDA...) |
-| **EGX (Egypt)** | `egx_market_overview`, `egx_stock_screener`, `egx_trade_plan`, `egx_fibonacci_retracement`, `egx_data_status` (data-layer health, coverage, freshness) |
+| **EGX (Egypt)** | `egx_market_overview`, `egx_stock_screener`, `egx_trade_plan`, `egx_fibonacci_retracement`, `egx_data_status` (data-layer health, coverage, freshness), `egx_signal_calibration` / `egx_calibration_signals` (measured, corrected signal statistics) |
 | **Turkish (BIST)** | Via TradingView screener |
 | **Europe & Canada** | Euronext (Paris, Amsterdam, Brussels, Lisbon), LSE, Xetra, Frankfurt, Milan, SIX, Madrid, TSX, TSX Venture |
 | **India & Indonesia** | NSE, BSE (NIFTY, BANKNIFTY, SENSEX), IDX (Jakarta Composite) |
@@ -523,6 +528,33 @@ full contract, and `EGX_DATA_STRATEGY.md` beside it for the source-options plan)
 - **Disagreement is a first-class outcome.** Two sources within 1% ⇒
   `AGREEMENT`; outside ⇒ `DIVERGENCE`/`CONFLICT`. A conflicted value is never
   silently averaged and never returned as usable.
+
+### 📐 Are the EGX signals real? (calibration)
+
+Every condition behind the EGX smart-money tools is measured against stored
+history before it is reported, and shipped with the statistics that make it
+falsifiable:
+
+```bash
+python scripts/egx_calibrate.py --list                 # conditions + hypotheses
+python scripts/egx_calibrate.py --index EGX30 --horizon 5 --folds 3
+python scripts/egx_calibrate.py --signals c2,c3 --markdown reports/calibration.md
+```
+
+```text
+signal                              n  dates     hit    base  excess       p       q  verdict
+c3                                353    209   67.1%   56.9%   10.3%   0.017   0.133  SUGGESTIVE
+accumulation_corrected            370    168   64.3%   56.9%    7.5%   0.093   0.248  SUGGESTIVE
+c5                               1304    304   56.2%   56.9%   -0.7%   0.741   0.741  REJECTED
+accumulation_high_conviction        0      0       —   56.9%       —       —       —  NO_EVENTS
+```
+
+Read it as: *n* events over *dates* distinct sessions, hit rate against the
+sample's base rate, excess after subtracting the equal-weighted market move
+over the same entry/exit dates, a p-value from a block permutation of each
+symbol's whole return series, and a q-value corrected for everything tested in
+the run. **NO_EVENTS is a finding, not a gap** — it is how the unsatisfiable
+legacy breakout condition announced itself.
 
 ---
 

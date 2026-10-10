@@ -282,31 +282,54 @@ class PriceStructureAnalyzer:
     """Identify objective support/resistance and breakout levels."""
     
     @staticmethod
+    def _previous_window(df: pd.DataFrame, lookback: int) -> pd.DataFrame:
+        """The ``lookback`` sessions BEFORE the current bar.
+
+        Excluding the current bar is not cosmetic. Levels that include today's
+        own high can never be broken by today's close: ``close <= high <=
+        max(high over a window containing today)`` is arithmetic. Measured over
+        4,800 synthetic sessions the previous formulation produced
+        ``is_above_20d_high == True`` exactly zero times, which silently made
+        the breakout condition of the accumulation signal — and every "high
+        conviction" signal that required it — unreachable.
+        """
+        if len(df) <= 1:
+            return df.iloc[0:0]
+        start = max(0, len(df) - 1 - lookback)
+        return df.iloc[start:-1]
+
+    @staticmethod
     def find_swing_levels(df: pd.DataFrame, lookback: int = 20) -> Tuple[float, float]:
         """
         Last swing high and swing low (not subjective).
         Swing High: local maximum where price was higher on both sides.
         Swing Low: local minimum where price was lower on both sides.
+
+        Measured over the ``lookback`` sessions that precede the current bar.
         """
-        df = df.copy()
-        
-        # Find local highs
-        highs = df['high'].iloc[-lookback:]
-        swing_high = highs.max()
-        
-        # Find local lows
-        lows = df['low'].iloc[-lookback:]
-        swing_low = lows.min()
-        
+        window = PriceStructureAnalyzer._previous_window(df, lookback)
+        if window.empty:  # single-bar frame: fall back to the current bar
+            window = df.iloc[-1:]
+
+        swing_high = window['high'].max()
+        swing_low = window['low'].min()
+
         return swing_high, swing_low
     
     @staticmethod
     def calculate_price_structure(df: pd.DataFrame) -> PriceStructure:
-        """Objective price levels based on recent action."""
+        """Objective price levels based on recent action.
+
+        ``highest_high_20d`` / ``lowest_low_20d`` are the extremes of the 20
+        sessions *before* the current bar, so ``is_above_20d_high`` means an
+        actual breakout rather than a comparison the close can never win.
+        """
         df = df.copy()
-        window = df.tail(30)
-        
-        # 20-day extremes
+        window = PriceStructureAnalyzer._previous_window(df, 30)
+        if window.empty:
+            window = df.iloc[-1:]
+
+        # previous-session extremes: levels the current close can break
         highest_20d = window['high'].max()
         lowest_20d = window['low'].min()
         

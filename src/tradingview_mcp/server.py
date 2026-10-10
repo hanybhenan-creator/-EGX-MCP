@@ -63,6 +63,10 @@ from tradingview_mcp.core.services.smart_money_service import (
 from tradingview_mcp.core.services.egx_data_service import (
     egx_data_status as _egx_data_status,
 )
+from tradingview_mcp.core.services.egx_calibration_service import (
+    egx_signal_calibration as _egx_signal_calibration,
+    egx_calibration_signals as _egx_calibration_signals,
+)
 from tradingview_mcp.core.services.yahoo_finance_service import (
     get_price,
     get_price_async,
@@ -631,6 +635,83 @@ def egx_data_status(index: str = "EGX30", sample: int = 10) -> dict:
         return _egx_data_status(index=index, sample=sample)
     except Exception as e:
         return exception_to_envelope(e, context="egx_data_status")
+
+
+@mcp.tool(annotations=ToolAnnotations(title="EGX Signal Calibration", readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+def egx_signal_calibration(
+    signal: str = "",
+    horizon: int = 5,
+    symbols: str = "",
+    index: str = "",
+    lookback_days: int = 700,
+    max_symbols: int = 120,
+    permutations: int = 300,
+    walk_forward_folds: int = 3,
+) -> dict:
+    """What the EGX smart-money conditions actually predicted, measured.
+
+    Every condition in this server's EGX analysis (POC below price, buy/sell
+    ratio > 1.5, 20-day breakout, OBV/ADL confirmation) is a *hypothesis*.
+    This tool tests them against the stored history and returns calibrated
+    numbers instead of point estimates:
+
+      - events: how many times the condition fired, over how many symbols and
+        distinct dates
+      - hit_rate with a 95% Wilson interval, next to the sample's base_rate
+        (what you would have got buying a random symbol on a random session)
+      - excess_hit: the difference that the condition's timing is responsible for
+      - p_value: circular block permutation — "given this sequence of returns,
+        how surprising is the signal's timing?"
+      - q_value: Benjamini-Hochberg correction across every signal measured in
+        the run, because testing a dozen conditions on one history always
+        produces a 'significant' one by chance
+      - walk_forward: in-sample vs contiguous out-of-sample folds, with a
+        ROBUST / MODERATE / WEAK / OVERFITTED verdict
+
+    Runs entirely on the local store (no network). Requires daily history:
+    run `python scripts/egx_data_sync.py daily --index EGX30 --days 365` once
+    first. Signals with zero events are reported as NO_EVENTS rather than
+    silently dropped — check them: the legacy 20-day-breakout condition is
+    arithmetically unsatisfiable and this is where that shows up.
+
+    Args:
+        signal: One signal name, or empty to measure the default batch.
+        horizon: Sessions held after the signal (entry next session's open).
+        symbols: Explicit EGX tickers, comma or semicolon separated.
+        index: EGX30 | EGX70 | EGX100 | SHARIAH33 | EGX35LV | TAMAYUZ.
+        lookback_days: How far back to read the local store.
+        max_symbols: Cap on symbols analysed (1-400).
+        permutations: Block-permutation rounds per signal (0 disables p-values).
+        walk_forward_folds: Out-of-sample folds (0 disables walk-forward).
+    """
+    try:
+        return _egx_signal_calibration(
+            signal=signal,
+            horizon=horizon,
+            symbols=symbols,
+            index=index,
+            lookback_days=lookback_days,
+            max_symbols=max_symbols,
+            permutations=permutations,
+            walk_forward_folds=walk_forward_folds,
+        )
+    except Exception as e:
+        return exception_to_envelope(e, context="egx_signal_calibration")
+
+
+@mcp.tool(annotations=ToolAnnotations(title="EGX Calibration Signals", readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+def egx_calibration_signals() -> dict:
+    """List the registered EGX signals and the hypothesis each one is tested against.
+
+    Use this to pick a ``signal`` argument for ``egx_signal_calibration``, and
+    to see the distinction between the legacy conditions (as shipped) and the
+    corrected ones. Third-party code can add conditions by registering a
+    ``SignalSpec`` — calibration discovers them automatically.
+    """
+    try:
+        return _egx_calibration_signals()
+    except Exception as e:
+        return exception_to_envelope(e, context="egx_calibration_signals")
 
 
 # ── Smart-money / banker-fund tools ───────────────────────────────────────────
