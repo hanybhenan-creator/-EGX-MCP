@@ -21,6 +21,9 @@ same split the project already uses for ``scripts/refresh_coinlists.py``.
     # What does the trading calendar believe about a year?
     python scripts/egx_data_sync.py holidays --year 2026
 
+    # Institutional footprint read for one symbol (from the local store only)
+    python scripts/egx_data_sync.py fingerprint COMI
+
 Every command is safe to re-run: refreshes skip symbols already current for
 the EGX session, and the store is append-only where it matters (quotes) and
 idempotent where it should be (daily bars).
@@ -182,6 +185,26 @@ def _refresh(args: argparse.Namespace, kind: str) -> int:
         layer.close()
 
 
+# ── fingerprint ─────────────────────────────────────────────────────────────
+
+
+def cmd_fingerprint(args: argparse.Namespace) -> int:
+    # The service resolves its store through the process-wide layer singleton,
+    # which reads EGX_DATA_DB: honour --db by pointing it there and dropping any
+    # layer a previous call in this process built for another database.
+    os.environ["EGX_DATA_DB"] = str(args.db)
+
+    from tradingview_mcp.core.data.factory import reset_layer
+    from tradingview_mcp.core.services.egx_footprint_service import egx_accumulation_fingerprint
+
+    reset_layer()
+    payload = egx_accumulation_fingerprint(
+        args.symbol, lookback_days=args.lookback_days, zone_lookback=args.zone_lookback
+    )
+    _print(payload)
+    return 1 if "error" in payload else 0
+
+
 # ── calendar ────────────────────────────────────────────────────────────────
 
 
@@ -238,11 +261,18 @@ def main(argv: list[str] | None = None) -> int:
     holidays = sub.add_parser("holidays", help="show what the trading calendar believes")
     holidays.add_argument("--year", type=int, default=None)
 
+    fp = sub.add_parser("fingerprint", help="institutional footprint read for one symbol")
+    fp.add_argument("symbol")
+    fp.add_argument("--lookback-days", type=int, default=20)
+    fp.add_argument("--zone-lookback", type=int, default=30)
+
     args = parser.parse_args(argv)
     if args.command == "status":
         return cmd_status(args)
     if args.command == "probe":
         return cmd_probe(args)
+    if args.command == "fingerprint":
+        return cmd_fingerprint(args)
     if args.command == "holidays":
         if args.year is None:
             args.year = EGXCalendar.from_env().now().year

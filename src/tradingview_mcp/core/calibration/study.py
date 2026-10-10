@@ -41,6 +41,7 @@ from __future__ import annotations
 import random
 from collections import defaultdict
 from dataclasses import dataclass, field
+import math
 from typing import Any, Callable, Iterable, Mapping, Optional, Sequence
 
 from tradingview_mcp.core.calibration import stats
@@ -146,6 +147,7 @@ class Measurement:
     mean_return: Optional[float] = None
     mean_excess: Optional[float] = None
     median_excess: Optional[float] = None
+    excess_stdev: Optional[float] = None
     p_hit: Optional[float] = None
     p_mean: Optional[float] = None
     q_hit: Optional[float] = None
@@ -178,6 +180,7 @@ class Measurement:
             "mean_return": _r(self.mean_return, 4),
             "mean_excess": _r(self.mean_excess, 4),
             "median_excess": _r(self.median_excess, 4),
+            "excess_stdev": _r(self.excess_stdev, 4),
             "p_value_hit": _r(self.p_hit, 4),
             "p_value_mean": _r(self.p_mean, 4),
             "q_value_hit": _r(self.q_hit, 4),
@@ -291,6 +294,7 @@ def measure(
     result.mean_return = stats.mean(returns)
     result.mean_excess = stats.mean(excesses)
     result.median_excess = stats.median(excesses)
+    result.excess_stdev = stats.stdev(excesses)
     dates = [fwd.entry_date for _, fwd in events]
     result.first_event, result.last_event = min(dates), max(dates)
 
@@ -447,9 +451,11 @@ class Fold:
             "train_events": self.train.events,
             "train_hit_rate": _r(self.train.hit_rate),
             "train_excess_hit": _r(self.train.excess_hit),
+            "train_mean_excess": _r(self.train.mean_excess, 4),
             "test_events": self.test.events,
             "test_hit_rate": _r(self.test.hit_rate),
             "test_excess_hit": _r(self.test.excess_hit),
+            "test_mean_excess": _r(self.test.mean_excess, 4),
             "test_hit_rate_ci95": (
                 [_r(self.test.hit_ci[0]), _r(self.test.hit_ci[1])] if self.test.hit_ci else None
             ),
@@ -471,6 +477,7 @@ class WalkForward:
             "horizon": self.horizon,
             "folds": [f.as_dict() for f in self.folds],
             "retention": _r(self.retention),
+            "retention_basis": "pooled out-of-sample mean excess / pooled in-sample mean excess",
             "verdict": self.verdict,
             "reason": self.reason,
         }
@@ -498,7 +505,7 @@ def walk_forward(
     permutations: int = 0,
     min_test_events: int = 10,
     min_train_events: int = 30,
-    min_train_excess: float = 0.01,
+    min_train_excess: float = 0.002,
 ) -> WalkForward:
     """Measure the signal in-sample and out-of-sample across contiguous folds.
 
@@ -543,30 +550,40 @@ def walk_forward(
             )
         )
 
-    # A fold only votes when its in-sample edge is big enough to be worth
-    # retaining: dividing a near-zero in-sample excess into an out-of-sample one
-    # produces ratios of 3x or 8x out of pure noise. That is how a curve fit
-    # gets reported as ROBUST, so the bar is explicit and stated in the reason.
-    usable = [
-        f
-        for f in out
-        if f.test.events >= min_test_events
-        and f.train.events >= min_train_events
-        and (f.train.excess_hit or 0) >= min_train_excess
-    ]
+    # Only folds with enough evidence on both sides vote, and the in-sample edge
+    # must clear BOTH a small absolute floor and one standard error of its own
+    # sampling distribution. Dividing a near-zero in-sample excess into an
+    # out-of-sample one produces ratios of 3x or 8x out of pure noise, which is
+    # exactly how a curve fit gets reported as ROBUST.
+    def _gated(fold: Fold) -> bool:
+        if fold.test.events < min_test_events or fold.train.events < min_train_events:
+            return False
+        mean_excess = fold.train.mean_excess
+        if mean_excess is None:
+            return False
+        se = (fold.train.excess_stdev or 0.0) / math.sqrt(max(1, fold.train.events))
+        return mean_excess >= min_train_excess and mean_excess >= se
+
+    usable = [f for f in out if _gated(f)]
     if not usable:
         return WalkForward(
             signal, sample.horizon, out, None, "NO_TRAIN_EDGE",
             "no fold had at least "
-            f"{min_train_events} in-sample events with an excess of {min_train_excess:.0%} "
-            f"alongside {min_test_events}+ out-of-sample events",
+            f"{min_train_events} in-sample events with a mean excess above both "
+            f"{min_train_excess:.1%} and one standard error, alongside "
+            f"{min_test_events}+ out-of-sample events",
         )
-    ratios = [
-        f.test.excess_hit / f.train.excess_hit
-        for f in usable
-        if f.train.excess_hit not in (None, 0) and f.test.excess_hit is not None
-    ]
-    retention = stats.mean(ratios)
+    # Retention is the pooled ratio of MEAN excess, not of hit-rate excess and
+    # not the mean of per-fold ratios. Two reasons, both measured on the
+    # planted-footprint control: a hit-rate lift of a few points has a large
+    # sampling variance, so its per-fold ratios swung between 0.19 and 0.83 on
+    # one dataset, while the mean excess held its sign in every fold; and
+    # averaging ratios weights a fold by nothing but its denominator. Pooling
+    # the mean excess weights every fold by the edge it actually measured.
+    train_edges = [f.train.mean_excess for f in usable if f.train.mean_excess is not None]
+    test_edges = [f.test.mean_excess for f in usable if f.test.mean_excess is not None]
+    total_train = sum(train_edges)
+    retention = (sum(test_edges) / total_train) if total_train else None
     if retention is None:
         return WalkForward(signal, sample.horizon, out, None, "NO_TRAIN_EDGE", "retention not computable")
     if retention >= 0.8:

@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Institutional footprint layer** (`tradingview_mcp.core.analysis.footprints`).
+  The "volume rises while price stays flat" design from the architecture guide,
+  implemented over stored bars with no indicators: volume anomalies against a
+  trailing average, accumulation zones (active zones included) with measured
+  support/resistance volume, absorbed dips, breakout preparation, shakeout
+  reclaims, and the distribution mirror. The composite scores are documented
+  as weighted flag sums, not probabilities; their predictive value is what the
+  calibration engine measures, and six footprint conditions are registered for
+  exactly that purpose.
+- **`egx_accumulation_fingerprint`** MCP tool (read-only, offline) and
+  `python scripts/egx_data_sync.py fingerprint SYMBOL`. Each reply includes a
+  **measured** `data_quality` score (0-100, grade A-F) built from calendar
+  coverage, OHLCV integrity, freshness against the newest settled session, and
+  the per-source success rate observed on this machine. Every component is
+  returned with the score, and an unmeasurable component is excluded and named
+  rather than assumed. 43 tools total.
+
+  **Controls (synthetic, seeded — not live EGX data; this sandbox has no
+  outbound access to EGX or Yahoo, so no real-market hit rate is claimed).**
+  24 symbols × 430 sessions, horizon 5, 150 permutations, 3 folds:
+
+  | run | signal | events | hit vs base | excess | q | verdict | walk-forward |
+  |---|---|---|---|---|---|---|---|
+  | footprint planted | hidden_accumulation | 467 | 68.1% vs 63.8% | +4.3 pts | 0.050 | VALIDATED | MODERATE (0.65) |
+  | footprint planted | volume_footprint | 865 | 67.9% vs 63.8% | +4.0 pts | 0.040 | VALIDATED | MODERATE (0.68) |
+  | footprint planted | absorption | 27 | 66.7% vs 63.8% | +2.8 pts | 0.437 | SUGGESTIVE | NO_TRAIN_EDGE |
+  | pure noise | hidden_accumulation | 154 | 50.6% vs 53.2% | −2.6 pts | 0.821 | REJECTED | not run |
+  | pure noise | volume_footprint | 604 | 52.6% vs 53.2% | −0.6 pts | 0.821 | REJECTED | not run |
+  | pure noise | absorption | 23 | 52.2% vs 53.2% | −1.0 pts | 0.821 | REJECTED | not run |
+
+  Walk-forward runs only for signals that come back VALIDATED or SUGGESTIVE, by
+  design, so the noise rows have no fold analysis.
 - **Signal calibration engine** (`tradingview_mcp.core.calibration`) — the
   answer to "confidence: 87, according to what?". Every smart-money condition is
   re-expressed as a function over time and measured against the stored EGX
@@ -31,7 +63,7 @@ All notable changes to this project will be documented in this file.
   stored bars; third-party conditions join by registering a `SignalSpec`.
 - **New MCP tools** `egx_signal_calibration` (measure conditions against the
   local store — read-only, works offline) and `egx_calibration_signals`
-  (catalogue with each signal's hypothesis). 42 tools total.
+  (catalogue with each signal's hypothesis).
 - **`scripts/egx_calibrate.py`** — the same engine from the shell, with
   `--list`, per-signal selection, configurable horizon/permutations/folds, and
   JSON/Markdown report output.
@@ -39,7 +71,30 @@ All notable changes to this project will be documented in this file.
   DistributionDetector and only the accumulation side ever shipped), registered
   so they can be measured like everything else.
 
+### Changed
+- **Walk-forward retention is now the pooled ratio of mean excess** (out-of-
+  sample ÷ in-sample), and a fold votes only when its in-sample mean excess
+  clears 0.2% *and* one standard error. The previous per-fold ratio of hit-rate
+  excess swung between 0.19 and 0.83 on the same planted-edge data, and a fold
+  with a near-zero in-sample edge could dominate the verdict. Walk-forward
+  payloads now include `train_mean_excess`, `test_mean_excess` and
+  `retention_basis`.
+- **Calibration default lookback is 1,500 sessions** (was 700). The volume
+  profile needs 120 sessions; a 700-session default on short stored history made
+  long-memory conditions report NO_EVENTS for lack of history, not lack of
+  signal. Short histories now produce an explicit warning.
+- Default calibration batch: 15 signals (9 legacy + 6 footprint), 200
+  permutations.
+
 ### Fixed
+- **Footprint port: four defects found by the test suite before release.**
+  Absorption measured volume against the scanned tail instead of the full
+  series (so it never fired); the zone strength formula scaled a share by 1000
+  and scored a dead flat line at 30/100 (now gated on volume activity); the
+  consecutive-days counter reported the anomaly count (now stops at the first
+  calendar gap); and fixture generators produced candles violating high ≥
+  max(open, close), which the quality scorer correctly flagged as 119 invalid
+  bars.
 - **The accumulation signal's breakout condition was unsatisfiable.** The
   legacy `is_above_20d_high` compared the current close against the highest
   high of a window that *included* the current bar — and a close can never

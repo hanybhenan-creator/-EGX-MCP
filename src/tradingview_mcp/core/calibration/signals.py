@@ -43,6 +43,8 @@ from bisect import bisect_right
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Optional, Sequence
 
+from tradingview_mcp.core.analysis import footprints
+
 Bar = Mapping[str, Any]
 CtxFunction = Callable[["SignalContext", int], Optional[bool]]
 
@@ -402,6 +404,58 @@ def d5_adl_weak(ctx: SignalContext, i: int) -> Optional[bool]:
     return adl[i] < rolling_mean(adl, window, i)
 
 
+# ── institutional footprint conditions (core/analysis/footprints.py) ────────
+#
+# These are the design document's microstructure claims, evaluated per session
+# so they can be measured like everything else. The series builders are
+# memoized in the context: each costs one pass over the symbol's bars.
+
+
+def fp_hidden_accumulation(ctx: SignalContext, i: int) -> Optional[bool]:
+    flags = ctx.series(
+        "fp:hidden",
+        lambda: footprints.hidden_accumulation_flags(ctx.bars, lookback=int(ctx.param("flow_period"))),
+    )
+    return flags[i] if i < len(flags) else None
+
+
+def fp_volume_footprint(ctx: SignalContext, i: int) -> Optional[bool]:
+    flags = ctx.series(
+        "fp:footprint",
+        lambda: footprints.volume_footprint_flags(ctx.bars, lookback=int(ctx.param("flow_period"))),
+    )
+    return flags[i] if i < len(flags) else None
+
+
+def fp_absorption(ctx: SignalContext, i: int) -> Optional[bool]:
+    flags = ctx.series(
+        "fp:absorption",
+        lambda: footprints.absorption_flags(ctx.bars, lookback=int(ctx.param("flow_period"))),
+    )
+    return flags[i] if i < len(flags) else None
+
+
+def fp_breakout_preparation(ctx: SignalContext, i: int) -> Optional[bool]:
+    window = int(ctx.param("structure_window"))
+    if i + 1 < window + 5:
+        return None
+    prep = footprints.detect_breakout_preparation(ctx.bars[: i + 1], window=window)
+    return prep.breakout_ready
+
+
+def fp_distribution_footprint(ctx: SignalContext, i: int) -> Optional[bool]:
+    lookback = int(ctx.param("flow_period"))
+    if i + 1 < lookback + 5:
+        return None
+    return footprints._detect_distribution(ctx.bars[: i + 1], lookback=lookback)
+
+
+def fp_shakeout_reclaim(ctx: SignalContext, i: int) -> Optional[bool]:
+    if i + 1 < 30:
+        return None
+    return footprints.detect_shakeout(ctx.bars[: i + 1], window=10)
+
+
 LEGACY_CONDITIONS = ("c1", "c2", "c3_legacy", "c4", "c5")
 CORRECTED_CONDITIONS = ("c1", "c2", "c3", "c4", "c5")
 DISTRIBUTION_CONDITIONS = ("d1", "d2", "d3", "d4", "d5")
@@ -517,6 +571,20 @@ def register_builtins() -> None:
                    "on-balance volume confirmes distribution"),
         SignalSpec("d5", "ADL below its 20-session mean", d5_adl_weak, "condition",
                    "accumulation/distribution line confirmes distribution"),
+        SignalSpec("hidden_accumulation", "Hidden accumulation (volume spike, flat candle)", fp_hidden_accumulation,
+                   "condition", "institutions buy size without moving price: volume >2x average with a <1.5% candle"),
+        SignalSpec("volume_footprint", "Volume footprint (1.5x volume, <2.5% candle)", fp_volume_footprint,
+                   "condition", "the looser threshold pair of the reference implementation"),
+        SignalSpec("absorption", "Absorption day (dip bought back on volume)", fp_absorption,
+                   "condition", "session opens below the previous close and closes back above it on >1.5x volume"),
+        SignalSpec("breakout_preparation", "Breakout preparation (top of range, compressed, volume build)",
+                   fp_breakout_preparation, "condition",
+                   "range position >0.7 with 5-day volatility under 70% of the 30-day and rising 5-day volume"),
+        SignalSpec("distribution_footprint", "Distribution footprint (volume spike, close in lower third)",
+                   fp_distribution_footprint, "condition",
+                   "the mirror of hidden accumulation: heavy volume while price settles near the session low"),
+        SignalSpec("shakeout_reclaim", "Shakeout and reclaim of a prior low", fp_shakeout_reclaim,
+                   "condition", "a 20-session low is broken and reclaimed within ten sessions"),
         SignalSpec("accumulation_legacy", "Accumulation signal as shipped (≥4/5 legacy)", accumulation_legacy,
                    "accumulation", "the composite signal the project has been reporting"),
         SignalSpec("accumulation_corrected", "Accumulation signal, corrected breakout (≥4/5)", accumulation_corrected,

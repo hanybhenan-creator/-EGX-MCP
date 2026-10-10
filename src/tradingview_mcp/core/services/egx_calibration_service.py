@@ -38,6 +38,12 @@ DEFAULT_SIGNALS = [
     "accumulation_corrected",
     "accumulation_high_conviction",
     "distribution_corrected",
+    "hidden_accumulation",
+    "volume_footprint",
+    "absorption",
+    "breakout_preparation",
+    "distribution_footprint",
+    "shakeout_reclaim",
     "c1", "c2", "c3", "c4", "c5",
 ]
 
@@ -72,10 +78,16 @@ def _payload_warnings(bars_by_symbol: dict[str, list[dict]], horizon: int, *, fo
             f"only {len(bars_by_symbol)} symbol(s) have 60+ stored sessions: the cross-sectional "
             "benchmark is thin, so 'excess' is closer to a raw return than it should be"
         )
-    if 0 < sessions < 120:
+    if 0 < sessions < 250:
         warnings.append(
-            f"longest history is {sessions} sessions (~{sessions // 21} months): treat every "
-            "verdict as preliminary, and expect walk-forward folds to report INSUFFICIENT_HISTORY"
+            f"longest history is {sessions} sessions (~{sessions // 21} months). That is below the "
+            "120-session volume-profile window plus a horizon, so conditions like c1 and the "
+            "accumulation composites can report NO_EVENTS for lack of history rather than lack of "
+            "signal; raise lookback_days or sync more history."
+        )
+        warnings.append(
+            f"treat every verdict as preliminary below ~250 sessions ({sessions} here), and expect "
+            "walk-forward folds to report INSUFFICIENT_HISTORY"
         )
     from tradingview_mcp.core.calibration.study import MIN_SESSIONS_PER_FOLD
 
@@ -95,9 +107,9 @@ def egx_signal_calibration(
     horizon: int = 5,
     symbols: str = "",
     index: str = "",
-    lookback_days: int = 700,
+    lookback_days: int = 1500,
     max_symbols: int = DEFAULT_MAX_SYMBOLS,
-    permutations: int = 300,
+    permutations: int = 200,
     walk_forward_folds: int = 3,
 ) -> dict[str, Any]:
     """Measure what each smart-money condition actually predicted, historically.
@@ -113,7 +125,8 @@ def egx_signal_calibration(
       horizon: sessions held after the signal (entry at the next session's open).
       symbols: explicit comma/semicolon-separated EGX tickers (optional).
       index: EGX30 / EGX70 / EGX100 / SHARIAH33 / EGX35LV / TAMAYUZ (optional).
-      lookback_days: how far back to read the store.
+      lookback_days: how far back to read the store. Must comfortably exceed
+        the longest signal window (the volume profile uses 120 sessions).
       max_symbols: cap on symbols analysed (cost is linear in symbols × sessions).
       permutations: block-permutation rounds per signal (0 disables p-values).
       walk_forward_folds: contiguous out-of-sample folds (0 disables).

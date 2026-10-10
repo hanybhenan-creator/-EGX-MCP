@@ -67,6 +67,9 @@ from tradingview_mcp.core.services.egx_calibration_service import (
     egx_signal_calibration as _egx_signal_calibration,
     egx_calibration_signals as _egx_calibration_signals,
 )
+from tradingview_mcp.core.services.egx_footprint_service import (
+    egx_accumulation_fingerprint as _egx_accumulation_fingerprint,
+)
 from tradingview_mcp.core.services.yahoo_finance_service import (
     get_price,
     get_price_async,
@@ -643,7 +646,7 @@ def egx_signal_calibration(
     horizon: int = 5,
     symbols: str = "",
     index: str = "",
-    lookback_days: int = 700,
+    lookback_days: int = 1500,
     max_symbols: int = 120,
     permutations: int = 300,
     walk_forward_folds: int = 3,
@@ -679,7 +682,9 @@ def egx_signal_calibration(
         horizon: Sessions held after the signal (entry next session's open).
         symbols: Explicit EGX tickers, comma or semicolon separated.
         index: EGX30 | EGX70 | EGX100 | SHARIAH33 | EGX35LV | TAMAYUZ.
-        lookback_days: How far back to read the local store.
+        lookback_days: How far back to read the local store. The volume
+            profile needs 120 sessions, so a short window makes long-memory
+            signals report NO_EVENTS for lack of history, not lack of signal.
         max_symbols: Cap on symbols analysed (1-400).
         permutations: Block-permutation rounds per signal (0 disables p-values).
         walk_forward_folds: Out-of-sample folds (0 disables walk-forward).
@@ -712,6 +717,55 @@ def egx_calibration_signals() -> dict:
         return _egx_calibration_signals()
     except Exception as e:
         return exception_to_envelope(e, context="egx_calibration_signals")
+
+
+@mcp.tool(annotations=ToolAnnotations(title="EGX Accumulation Fingerprint", readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+def egx_accumulation_fingerprint(
+    symbol: str,
+    lookback_days: int = 20,
+    zone_lookback: int = 30,
+) -> dict:
+    """Institutional footprint read for one EGX symbol, from stored history.
+
+    Detects the traces large buyers cannot hide — without a single moving
+    average, RSI or MACD:
+
+      - volume anomalies: sessions trading >1.5x their trailing 20-session
+        average while the candle moves under 2.5% (the "hidden accumulation"
+        fingerprint: size changing hands, price not moving)
+      - accumulation zones: runs of compressed 5-session volatility, with the
+        volume that actually traded at each end of the range measured —
+        including the zone price is in right now
+      - absorption: a session that opened below the previous close and closed
+        back above it on >1.5x volume (a dip being bought)
+      - breakout preparation: range position, volatility compression, volume
+        build, and the shakeout-and-reclaim pattern
+      - the distribution mirror: volume spikes with the close in the lower
+        third of the session range
+
+    Returns a described state, not a probability: `footprint_score` and the
+    preparation scores are weighted flag sums. The **measured** hit rate of
+    these patterns comes from `egx_signal_calibration`.
+
+    Also reports a measured `data_quality` score (0-100) for the symbol built
+    from calendar coverage, OHLCV structural integrity, freshness against the
+    newest settled session and the per-source success rate observed on this
+    machine — every component included, so the number can be argued with.
+
+    Runs entirely on the local store: run `python scripts/egx_data_sync.py
+    daily --symbols COMI --days 365` first if the symbol has no history.
+
+    Args:
+        symbol: EGX ticker, e.g. COMI (EGX: prefix and lowercase accepted).
+        lookback_days: Sessions for the volume baseline (5-120).
+        zone_lookback: Sessions scanned for consolidation zones (10-250).
+    """
+    try:
+        return _egx_accumulation_fingerprint(
+            symbol, lookback_days=lookback_days, zone_lookback=zone_lookback
+        )
+    except Exception as e:
+        return exception_to_envelope(e, context="egx_accumulation_fingerprint")
 
 
 # ── Smart-money / banker-fund tools ───────────────────────────────────────────

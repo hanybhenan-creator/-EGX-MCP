@@ -67,12 +67,17 @@ def random_walk(
     for i in range(sessions):
         extra = boost_after_breakout if boost_left > 0 else 0.0
         close = max(1.0, close * (1 + rng.gauss(drift + extra, sigma)))
-        high = close * (1 + abs(rng.gauss(0, 0.007)))
-        low = close * (1 - abs(rng.gauss(0, 0.007)))
+        open_ = close * (1 + rng.gauss(0, 0.004))
+        # Valid OHLC by construction: the data layer's structural checks
+        # (high >= max(open, close), low <= min(open, close)) are part of the
+        # contract, and fixtures that violate them would make the quality
+        # scorer report fake problems.
+        high = max(close * (1 + abs(rng.gauss(0, 0.007))), open_, close)
+        low = min(close * (1 - abs(rng.gauss(0, 0.007))), open_, close)
         bars.append(
             {
                 "date": f"2024-{(i // 21) + 1:02d}-{(i % 21) + 1:02d}",
-                "open": close * (1 + rng.gauss(0, 0.004)),
+                "open": open_,
                 "high": high,
                 "low": low,
                 "close": close,

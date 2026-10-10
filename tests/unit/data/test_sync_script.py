@@ -65,3 +65,31 @@ def test_offline_refresh_reports_failure_per_symbol(capsys, tmp_path, monkeypatc
     assert payload["problems"][0]["symbol"] == "COMI"
     assert payload["problems"][0]["error"]
     assert code in (0, 1)
+
+
+def test_fingerprint_needs_stored_history(capsys, tmp_path) -> None:
+    code, payload = run(capsys, ["--db", str(tmp_path / "fp.db"), "fingerprint", "COMI"])
+    assert code == 1
+    assert payload["error"]["code"] == "NO_DATA"
+
+
+def test_fingerprint_reports_a_footprint_when_history_exists(capsys, tmp_path) -> None:
+    from tradingview_mcp.core.data.factory import DataLayer
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from unit.calibration.conftest import random_walk
+
+    db = tmp_path / "fp2.db"
+    layer = DataLayer(db_path=db, include_tradingview=False)
+    layer.store.write_ohlcv("COMI", random_walk(200, seed=3), source="test")
+    layer.close()
+
+    code, payload = run(capsys, ["--db", str(db), "fingerprint", "COMI"])
+    assert code == 0
+    assert payload["symbol"] == "COMI"
+    assert payload["signal"] in {
+        "strong_accumulation", "mild_accumulation", "hidden_accumulation", "base_building",
+        "breakout_imminent", "smart_distribution", "trap_shakeout", "accumulation_complete",
+        "distribution_phase", "neutral",
+    }
+    assert payload["data_quality"]["grade"] in {"A", "B", "C", "D", "F"}

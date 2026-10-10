@@ -98,6 +98,8 @@ https://github-production-user-asset-6210df.s3.amazonaws.com/67838093/478689497-
 
 **Calibrated EGX signal measurement (October 2026)**
 
+- **Institutional footprint detection** — the volume-up / price-flat design from the architecture guide, implemented over stored bars and measured like every other condition (`egx_accumulation_fingerprint`, `python scripts/egx_data_sync.py fingerprint COMI`). Each reply carries a measured data-quality score, so the number can be argued with.
+
 - **No more uncalibrated confidence numbers.** The EGX smart-money conditions (POC below price, buy/sell ratio > 1.5, 20-day breakout, OBV/ADL confirmation) are now *measured* against stored history: events, hit rate with a 95% Wilson interval, the sample's base rate, the excess over an equal-weighted benchmark of the same entry/exit dates, a block-permutation p-value, a Benjamini–Hochberg q-value across the whole batch, and contiguous out-of-sample walk-forward folds. Each signal ends with a declared state: VALIDATED / SUGGESTIVE / REJECTED / NO_EVENTS. New tools: `egx_signal_calibration`, `egx_calibration_signals`; new CLI: `scripts/egx_calibrate.py`.
 - **Found and fixed a dead condition.** The breakout condition (`is_above_20d_high`) compared the current close with the highest high of a window that included the current bar — arithmetically unsatisfiable. Over 4,800 sessions it fired zero times, making the "5/5 high conviction" tier unreachable. Levels now come from the prior window; the same 4,800 sessions produce 405 breakouts, and the original formulation stays registered as `c3_legacy` so the calibration report keeps showing the difference.
 
@@ -494,7 +496,7 @@ Example prompt: "Compare all 9 strategies on MSFT for 2 years"
 | **Binance** | Crypto screener, all pairs |
 | **KuCoin / Bybit+** | Crypto screener |
 | **NASDAQ / NYSE** | US stocks (AAPL, TSLA, NVDA...) |
-| **EGX (Egypt)** | `egx_market_overview`, `egx_stock_screener`, `egx_trade_plan`, `egx_fibonacci_retracement`, `egx_data_status` (data-layer health, coverage, freshness), `egx_signal_calibration` / `egx_calibration_signals` (measured, corrected signal statistics) |
+| **EGX (Egypt)** | `egx_market_overview`, `egx_stock_screener`, `egx_trade_plan`, `egx_fibonacci_retracement`, `egx_data_status` (data-layer health, coverage, freshness), `egx_signal_calibration` / `egx_calibration_signals` (measured, corrected signal statistics), `egx_accumulation_fingerprint` (institutional footprint + measured data-quality score) |
 | **Turkish (BIST)** | Via TradingView screener |
 | **Europe & Canada** | Euronext (Paris, Amsterdam, Brussels, Lisbon), LSE, Xetra, Frankfurt, Milan, SIX, Madrid, TSX, TSX Venture |
 | **India & Indonesia** | NSE, BSE (NIFTY, BANKNIFTY, SENSEX), IDX (Jakarta Composite) |
