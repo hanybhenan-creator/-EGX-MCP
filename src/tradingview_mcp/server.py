@@ -60,6 +60,9 @@ from tradingview_mcp.core.services.smart_money_service import (
     analyze_smart_money,
     scan_egx_smart_money,
 )
+from tradingview_mcp.core.services.egx_data_service import (
+    egx_data_status as _egx_data_status,
+)
 from tradingview_mcp.core.services.yahoo_finance_service import (
     get_price,
     get_price_async,
@@ -592,6 +595,42 @@ def egx_fibonacci_retracement(symbol: str, lookback: str = "52W", timeframe: str
         return analyze_egx_fibonacci(symbol, lookback, timeframe)
     except Exception as e:
         return exception_to_envelope(e, context="egx_fibonacci_retracement")
+
+
+# ── EGX data acquisition layer (sources, freshness, local history) ────────────
+#
+# Only the read-only view is exposed as a tool: this server's tools all declare
+# readOnlyHint=True (a marketplace-directory requirement — see
+# tests/unit/test_tool_annotations.py). Refreshes write to the local SQLite
+# store and hit the network, so they live in ``scripts/egx_data_sync.py``
+# (same pattern as scripts/refresh_coinlists.py), not behind a tool.
+
+@mcp.tool(annotations=ToolAnnotations(title="EGX Data System Status", readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+def egx_data_status(index: str = "EGX30", sample: int = 10) -> dict:
+    """Health of the EGX data acquisition system — sources, store, freshness.
+
+    Use this BEFORE trusting any EGX number, and whenever an EGX tool returns
+    data that looks wrong. It reports, from facts rather than assumptions:
+
+      - market_clock: the EGX session phase (Sun–Thu, Africa/Cairo, DST-aware),
+        whether live data is expected right now, and the newest *settled*
+        session a correct feed should reach.
+      - sources: per-source reachability, circuit-breaker state, last error.
+      - store: how many symbols/bars/quotes are cached locally and how old.
+      - coverage: how many of the index's symbols are current against the EGX
+        calendar, and which ones are behind and by how many sessions.
+      - source_reliability: measured success rate per source on this machine.
+      - calendar_warnings: whether the year's holidays have been verified.
+
+    Args:
+        index: EGX30 | EGX70 | EGX100 | SHARIAH33 | EGX35LV | TAMAYUZ
+        sample: Max recent failure rows to include (1-25)
+    """
+    sample = max(1, min(sample, 25))
+    try:
+        return _egx_data_status(index=index, sample=sample)
+    except Exception as e:
+        return exception_to_envelope(e, context="egx_data_status")
 
 
 # ── Smart-money / banker-fund tools ───────────────────────────────────────────

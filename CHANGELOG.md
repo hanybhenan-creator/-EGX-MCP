@@ -4,6 +4,59 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **EGX data acquisition & verification layer** (`tradingview_mcp.core.data`).
+  The previous EGX data stack was scaffolding: abstract source interfaces with
+  no implementation, hard-coded sector/index tables, a key/value SQLite cache,
+  and no way to answer "where did this number come from?". This replaces it
+  with a layer whose whole purpose is that a number can be defended:
+
+  - `calendar.py` — EGX trading calendar. Sunday→Thursday week, session phases
+    (pre-open 09:30, continuous 10:00, closing auction 14:20, post-close 14:30)
+    computed in `Africa/Cairo` via `zoneinfo` so Egypt's reinstated DST is
+    handled by tzdata rather than by hand-rolled offsets. Holidays are data
+    (`egx_holidays.json`) with a per-year `verified` flag: an un-synced year is
+    *reported*, never silently treated as "no holidays".
+  - `provenance.py` — `Provenance`, `Sourced[T]` and `QualityFlag`. Every value
+    carries source, fetch time, latency, attempt index and validation verdicts.
+  - `transport.py` — injectable `Transport` protocol; `HttpxTransport` with
+    explicit timeouts, exponential backoff + jitter, `Retry-After` support and
+    per-host token-bucket pacing (default 0.5 rps on `egx.com.eg`); plus
+    `FakeTransport` so every parser test runs without a network.
+  - `html_tables.py` — stdlib-only HTML table reader. Correctly expands
+    `rowspan`/`colspan` so a two-level header cannot shift columns (the failure
+    mode where volume is read as price), and recovers JSON embedded in
+    `<script>` blocks as a fallback.
+  - `parsing.py` — refuses to guess: Arabic-Indic digits, ٬/٫ separators,
+    `(12.5)` negatives, `1.2M` suffixes, and the genuine `1.234` ambiguity.
+  - `quality.py` — three layers of checks: hard structural validity, plausibility
+    flags (`OUTLIER`) and cross-source triangulation
+    (`AGREEMENT`/`DIVERGENCE`/`CONFLICT`).
+  - `sources/` — `EGXOfficialSource` (multi-strategy parsing, ordered endpoint
+    candidates with the working one remembered, EN/AR column synonyms, and a
+    `ParseReport` that distinguishes "market closed" from "our selector broke");
+    `YahooFinanceSource` (`.CA` chart API, null candles dropped rather than
+    zeroed); `TradingViewSource` (delegates to the existing screener path
+    instead of building a second upstream client).
+  - `router.py` — capability-oriented fallback chain with official-first
+    ordering, quality gating, optional corroboration and a per-source circuit
+    breaker; `AllSourcesFailed` carries every attempt and its reason.
+  - `store.py` — schema-versioned SQLite (migrations, not `CREATE TABLE IF NOT
+    EXISTS` drift) with `ohlcv_observations` keeping *every* source's version of
+    a bar, `fetch_audit`, `ingest_runs` and `quality_events`; `ohlcv_gaps()`
+    measures completeness against the trading calendar.
+  - `ingest.py` — refreshes as transactions with reports: rows written, symbols
+    skipped (with the reason), per-symbol failures, and coverage measured to the
+    newest *settled* session.
+- **New MCP tool `egx_data_status`** — read-only health view: market clock,
+  source reachability + breaker state, store contents, calendar coverage,
+  measured per-source success rates on this machine, and holiday-sync warnings.
+- **`scripts/egx_data_sync.py`** — `status`, `probe` (live endpoint calibration
+  for `egx.com.eg`), `daily`, `quotes`, `universe`, `holidays`. Refreshes live
+  here rather than behind a tool because every tool in this server declares
+  `readOnlyHint=True`, an invariant enforced by `tests/unit/test_tool_annotations.py`.
+- 266 hermetic tests for the above (`tests/unit/data/`, `tests/unit/services/`).
+
 ### Fixed
 - **TradingView interval codes rejected as timeframes**: `"60"`, `"240"`,
   `"15"`, `"5"`, `"1440"`, `"D"` and `"W"` are now accepted and mapped to

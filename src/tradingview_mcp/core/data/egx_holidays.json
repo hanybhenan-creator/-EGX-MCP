@@ -1,0 +1,38 @@
+{
+  "_README": [
+    "EGX market closures. This file is DATA, not code, because the exchange",
+    "publishes its calendar by announcement and the Islamic-calendar holidays",
+    "shift every year.",
+    "",
+    "closures: ISO dates (YYYY-MM-DD) on which EGX does not trade. Only dates",
+    "          that actually fall on a Sun-Thu day matter (weekend entries are",
+    "          harmless but meaningless).",
+    "verified: false means the year has NOT been reconciled against EGX's own",
+    "          published announcement. An unverified year is treated as",
+    "          'holidays unknown' by EGXCalendar.sync_warnings(), never as",
+    "'no holidays exist' - silent under-fetching is the failure mode this flag",
+    "          exists to prevent.",
+    "",
+    "How to update: run `python scripts/egx_data_probe.py holidays --year YYYY`",
+    "to see what the calendar currently believes, then fill the moveable",
+    "Islamic dates (Eid al-Fitr ~3 days, Eid al-Adha ~4 days, Hijri New Year,",
+    "Mawlid) from the EGX announcement page and flip verified to true."
+  ],
+  "_fixed_date_national_holidays": {
+    "_note": "These recur on the same Gregorian date every year; they are still listed per-year so an unverified year stays visibly unverified.",
+    "01-07": "Coptic Christmas",
+    "01-25": "Revolution Day / National Police Day",
+    "04-25": "Sinai Liberation Day",
+    "05-01": "Labour Day",
+    "06-30": "June 30 Revolution Day",
+    "07-23": "July 23 Revolution Day",
+    "10-06": "Armed Forces Day"
+  },
+  "years": {
+    "2026": {
+      "verified": false,
+      "source": "NOT YET SYNCED from egx.com.eg announcements",
+      "closures": []
+    }
+  }
+}

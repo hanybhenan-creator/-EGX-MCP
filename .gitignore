@@ -245,3 +245,12 @@ dist/
 
 # Remotion promo video project (source + renders kept out of the repo)
 promo/
+
+# EGX data layer local store (SQLite + WAL sidecars). Generated at runtime by
+# scripts/egx_data_sync.py; never commit market data snapshots to the repo.
+egx_data.db
+egx_data.db-journal
+egx_data.db-wal
+egx_data.db-shm
+*.sqlite
+*.sqlite3

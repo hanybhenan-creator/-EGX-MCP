@@ -96,6 +96,12 @@ https://github-production-user-asset-6210df.s3.amazonaws.com/67838093/478689497-
 
 ## 🆕 What's New
 
+**EGX Data Acquisition Layer (October 2026)**
+
+- **EGX data layer rebuilt around verifiable provenance** — every value the EGX tools consume now carries its source, fetch time, latency and validation verdicts, and every fetch attempt (success or failure) is recorded. New package `core/data/`: `calendar` (EGX trades Sun–Thu, Africa/Cairo, DST-aware), `provenance`, `transport` (retry/backoff + per-host politeness + an injectable seam that keeps parser tests offline), `html_tables` (stdlib-only table reader that resolves rowspan/colspan so merged headers cannot shift price into volume), `parsing` (Arabic-Indic digits, ٬/٫ separators, `(12.5)` negatives, `1.2M` suffixes), `quality` (hard validity → plausibility flags → cross-source triangulation), `sources/` (egx.com.eg scraper with learned endpoint candidates, Yahoo `.CA` chart, a delegating TradingView adapter), `router` (fallback chain + circuit breakers), `store` (schema-versioned SQLite with per-source observations and a full audit trail) and `ingest` (refresh runs modelled as transactions with reports).
+- **New tool `egx_data_status`** — source reachability, circuit-breaker state, store contents, coverage against the EGX calendar, measured per-source success rates, and whether this year's holidays have been verified. Read-only; refreshes run via `scripts/egx_data_sync.py` (every tool in this server declares `readOnlyHint=True`).
+- **No more probability from fixed thresholds in the data path** — freshness is decided by the market calendar rather than a constant, missing sessions are detected against Sun–Thu trading days (minus holidays), and a value that two sources disagree on is flagged `CONFLICT` instead of being silently averaged.
+
 **Stability & Strategy Expansion (May 2026)**
 
 - **Async hot-path tools** — 7 high-traffic tools (`yahoo_price`, `stock_extended_hours`, `top_gainers`, `volume_breakout_scanner`, `multi_timeframe_analysis`, `financial_news`, `combined_analysis`) converted to `async def`. FastMCP runs sync tools serialized on the event loop — async unlocks real intra-server parallelism so concurrent tool calls actually overlap. `combined_analysis` additionally fans its 3 sub-calls out via `asyncio.gather` for ~3× wall-clock improvement on the power tool. `yahoo_price` / `stock_extended_hours` use `httpx.AsyncClient` for true non-blocking I/O; sync-library tools (`tradingview_ta`, `tradingview-screener`, `feedparser`) are off-loaded via `asyncio.to_thread`. *(PR — open)*
@@ -483,10 +489,40 @@ Example prompt: "Compare all 9 strategies on MSFT for 2 years"
 | **Binance** | Crypto screener, all pairs |
 | **KuCoin / Bybit+** | Crypto screener |
 | **NASDAQ / NYSE** | US stocks (AAPL, TSLA, NVDA...) |
-| **EGX (Egypt)** | `egx_market_overview`, `egx_stock_screener`, `egx_trade_plan`, `egx_fibonacci_retracement` |
+| **EGX (Egypt)** | `egx_market_overview`, `egx_stock_screener`, `egx_trade_plan`, `egx_fibonacci_retracement`, `egx_data_status` (data-layer health, coverage, freshness) |
 | **Turkish (BIST)** | Via TradingView screener |
 | **Europe & Canada** | Euronext (Paris, Amsterdam, Brussels, Lisbon), LSE, Xetra, Frankfurt, Milan, SIX, Madrid, TSX, TSX Venture |
 | **India & Indonesia** | NSE, BSE (NIFTY, BANKNIFTY, SENSEX), IDX (Jakarta Composite) |
+
+### 🇪🇬 EGX data layer (sources, freshness, local history)
+
+EGX has no public API, so the layer is built around the assumption that *any
+single source can be wrong, stale, or renamed overnight*:
+
+```bash
+python scripts/egx_data_sync.py status     # health, coverage, calendar state
+python scripts/egx_data_sync.py probe      # which egx.com.eg endpoints answer right now
+python scripts/egx_data_sync.py daily --index EGX30 --days 365
+python scripts/egx_data_sync.py universe   # whole-market snapshot + symbol master
+python scripts/egx_data_sync.py holidays --year 2026
+```
+
+Design rules (see `src/tradingview_mcp/core/data/EGX_DATA_LAYER.md` for the
+full contract, and `EGX_DATA_STRATEGY.md` beside it for the source-options plan):
+
+- **Nothing is a bare number.** Values come back as `Sourced[T]` with source,
+  timestamp, latency, quality flags and cross-source comparisons attached.
+- **Freshness is decided by the EGX calendar**, not by wall-clock constants —
+  the exchange trades Sunday→Thursday, sessions are computed in
+  `Africa/Cairo` (DST-aware), and holidays live in a data file with a
+  `verified` flag so an un-synced year is reported, never assumed.
+- **A source declares what it can serve.** The official scraper does *not*
+  claim daily history (its history page is an ASP.NET postback grid); Yahoo
+  serves history; TradingView corroborates. The router only asks for declared
+  capabilities.
+- **Disagreement is a first-class outcome.** Two sources within 1% ⇒
+  `AGREEMENT`; outside ⇒ `DIVERGENCE`/`CONFLICT`. A conflicted value is never
+  silently averaged and never returned as usable.
 
 ---
 

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<!--
+  Fixture: EGX-style market watch page.
+
+  Captured shape of an ASP.NET "StocksData"-style page: a layout table, a
+  table with colspan'd merged cells, and the prices grid in a second table.
+  Deliberately includes the awkward cases the parser has to survive:
+    * a leading navigation table with no numbers at all
+    * a rowspan="2" cell in the header (column geometry trap)
+    * thousands separators, a bare decimal, an Arabic-Indic digit row
+    * a footer "totals" row that is not a symbol
+    * an embedded JSON payload in a <script> block
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>EGX - Stocks Data</title>
+  <style>.hidden{display:none}</style>
+</head>
+<body>
+  <table class="nav">
+    <tr><td colspan="3">Egyptian Exchange &mdash; Trading Session</td></tr>
+    <tr><td><a href="/en/HomePage.aspx">Home</a></td><td><a href="/en/IndicesData.aspx">Indices</a></td><td>Delayed 15 min</td></tr>
+  </table>
+
+  <h2>Market Watch</h2>
+  <table id="gvStocks" class="table table-bordered">
+    <thead>
+      <tr>
+        <th rowspan="2">Symbol</th>
+        <th rowspan="2">Company Name</th>
+        <th colspan="4">Prices (EGP)</th>
+        <th rowspan="2">Change %</th>
+        <th rowspan="2">Volume</th>
+      </tr>
+      <tr>
+        <th>Open</th><th>High</th><th>Low</th><th>Close</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>COMI</td><td>Commercial International Bank</td>
+        <td>84.10</td><td>86.75</td><td>83.95</td><td>86.20</td>
+        <td>2.50%</td><td>1,234,567</td>
+      </tr>
+      <tr>
+        <td>TMGH</td><td>Telecom Egypt</td>
+        <td>38.50</td><td>39.10</td><td>38.20</td><td>38.95</td>
+        <td>-1.14%</td><td>845,120</td>
+      </tr>
+      <tr>
+        <td>FWRY</td><td>Fawry Banking &amp; Payment Technology</td>
+        <td>6.55</td><td>6.72</td><td>6.48</td><td>6.70</td>
+        <td>3.88%</td><td>12,004,300</td>
+      </tr>
+      <tr>
+        <td>SWDY</td><td>Elsewedy Electric</td>
+        <td>56.00</td><td>58.90</td><td>55.80</td><td>58.45</td>
+        <td>4.38%</td><td>2,310,900</td>
+      </tr>
+      <tr>
+        <td>EGAL</td><td>Egypt Aluminum</td>
+        <td>112.50</td><td>115.00</td><td>111.20</td><td>114.75</td>
+        <td>2.00%</td><td>412,880</td>
+      </tr>
+      <tr>
+        <td>ORAS</td><td>Orascom Construction</td>
+        <td>1,205.00</td><td>1,230.00</td><td>1,198.00</td><td>1,224.50</td>
+        <td>1.62%</td><td>98,450</td>
+      </tr>
+      <tr>
+        <td>ABUK</td><td>Abu Qir Fertilizers</td>
+        <td>75.00</td><td>76.40</td><td>74.55</td><td>76.10</td>
+        <td>1.47%</td><td>3,120,000</td>
+      </tr>
+    </tbody>
+    <tfoot>
+      <tr><td colspan="7">Total traded value (EGP)</td><td>18,976,217</td></tr>
+    </tfoot>
+  </table>
+
+  <script type="text/javascript">
+    var __EGX_INDICES__ = {"indices":[{"index":"EGX30","close":32456.78,"change_pct":"+0.85%"},
+                                     {"index":"EGX70","close":9123.44,"change_pct":"-0.32%"}]};
+    var __TRACKING__ = {id: "UA-0000"};
+  </script>
+</body>
+</html>

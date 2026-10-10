@@ -1,0 +1,52 @@
+{
+  "chart": {
+    "result": [
+      {
+        "meta": {
+          "currency": "EGP",
+          "symbol": "COMI.CA",
+          "exchangeName": "CAI",
+          "fullExchangeName": "Cairo",
+          "instrumentType": "EQUITY",
+          "firstTradeDate": 1150088400,
+          "regularMarketTime": 1786705200,
+          "gmtoffset": 7200,
+          "timezone": "EET",
+          "exchangeTimezoneName": "Africa/Cairo",
+          "regularMarketPrice": 86.2,
+          "chartPreviousClose": 84.1,
+          "previousClose": 84.1,
+          "scale": 3,
+          "priceHint": 2,
+          "currentTradingPeriod": {
+            "pre": {"timezone": "EET", "start": 1786689000, "end": 1786690800, "gmtoffset": 7200},
+            "regular": {"timezone": "EET", "start": 1786690800, "end": 1786708800, "gmtoffset": 7200},
+            "post": {"timezone": "EET", "start": 1786708800, "end": 1786712400, "gmtoffset": 7200}
+          },
+          "dataGranularity": "1d",
+          "range": "1mo",
+          "validRanges": ["1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"]
+        },
+        "timestamp": [1786107600, 1786194000, 1786280400, 1786366800, 1786453200, 1786539600, 1786626000, 1786705200],
+        "events": {"dividends": {"1786366800": {"amount": 1.5, "date": 1786366800}}},
+        "indicators": {
+          "quote": [
+            {
+              "open":  [83.5, 84.0, 84.9, 84.4, 85.1, 85.6, null, 86.2],
+              "high":  [84.2, 85.1, 85.4, 85.0, 86.0, 86.4, null, 86.75],
+              "low":   [82.9, 83.6, 84.2, 83.8, 84.6, 85.0, null, 85.1],
+              "close": [84.0, 84.9, 84.4, 85.1, 85.6, 86.2, null, 86.2],
+              "volume": [1204300, 998000, 1450000, 1100300, 1342000, 2210000, null, 1234567]
+            }
+          ],
+          "adjclose": [
+            {
+              "adjclose": [84.0, 84.9, 83.4, 85.1, 85.6, 86.2, null, 86.2]
+            }
+          ]
+        }
+      }
+    ],
+    "error": null
+  }
+}
