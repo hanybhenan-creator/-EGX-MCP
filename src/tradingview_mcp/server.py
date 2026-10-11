@@ -63,6 +63,9 @@ from tradingview_mcp.core.services.smart_money_service import (
 from tradingview_mcp.core.services.egx_data_service import (
     egx_data_status as _egx_data_status,
 )
+from tradingview_mcp.core.services.egx_wyckoff_state_service import (
+    egx_wyckoff_state as _egx_wyckoff_state,
+)
 from tradingview_mcp.core.services.egx_sector_calibration_service import (
     egx_sector_calibration as _egx_sector_calibration,
 )
@@ -641,6 +644,49 @@ def egx_data_status(index: str = "EGX30", sample: int = 10) -> dict:
         return _egx_data_status(index=index, sample=sample)
     except Exception as e:
         return exception_to_envelope(e, context="egx_data_status")
+
+
+@mcp.tool(annotations=ToolAnnotations(title="EGX Wyckoff State", readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+def egx_wyckoff_state(
+    symbol: str,
+    lookback_sessions: int = 5,
+    horizon: int = 5,
+    index: str = "",
+    lookback_days: int = 1500,
+    permutations: int = 200,
+    walk_forward_folds: int = 3,
+) -> dict:
+    """Which Wyckoff / VSA accumulation events fired on a stock recently, and what they measured.
+
+    Events (defined over OHLCV only, causal, parameters fixed before measurement):
+    selling_climax, spring, no_supply, secondary_test. Each recent event carries its
+    calibrated verdict from the same run that measures every other signal: hit rate
+    against the base rate, excess, q-value, and walk-forward verdict.
+
+    Returns a measured state, not a trade instruction. Walk-forward did not reliably
+    reject noise on the synthetic controls, so treat VALIDATED as one piece of evidence.
+
+    Args:
+        symbol: EGX ticker, e.g. COMI.
+        lookback_sessions: how many recent sessions to scan for events (1-20).
+        horizon: sessions held after the event for measurement (entry next open).
+        index: optional EGX index to define the calibration universe (EGX30, ...).
+        lookback_days: history to read from the store.
+        permutations: block-permutation count for the calibration (0-2000).
+        walk_forward_folds: 0 to skip, otherwise 2-6.
+    """
+    try:
+        return _egx_wyckoff_state(
+            symbol=symbol,
+            lookback_sessions=lookback_sessions,
+            horizon=horizon,
+            index=index,
+            lookback_days=lookback_days,
+            permutations=permutations,
+            walk_forward_folds=walk_forward_folds,
+        )
+    except Exception as e:
+        return exception_to_envelope(e, context="egx_wyckoff_state")
 
 
 @mcp.tool(annotations=ToolAnnotations(title="EGX Sector Calibration", readOnlyHint=True, destructiveHint=False, openWorldHint=False))

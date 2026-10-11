@@ -43,7 +43,7 @@ from bisect import bisect_right
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Optional, Sequence
 
-from tradingview_mcp.core.analysis import footprints
+from tradingview_mcp.core.analysis import footprints, wyckoff
 
 Bar = Mapping[str, Any]
 CtxFunction = Callable[["SignalContext", int], Optional[bool]]
@@ -456,6 +456,37 @@ def fp_shakeout_reclaim(ctx: SignalContext, i: int) -> Optional[bool]:
     return footprints.detect_shakeout(ctx.bars[: i + 1], window=10)
 
 
+# ── Wyckoff / VSA events (core/analysis/wyckoff.py) ─────────────────────────
+#
+# A separate family from the smart-money batch: kept out of DEFAULT_SIGNALS so
+# the existing calibrated results are unchanged. Each event is a flag series
+# built once per symbol and memoized in the context.
+
+
+def _wyckoff_flag(ctx: SignalContext, i: int, event: str) -> Optional[bool]:
+    flags = ctx.series(f"wy:{event}", lambda: wyckoff.FLAG_BUILDERS[event](ctx.bars))
+    return flags[i] if i < len(flags) else None
+
+
+def wy_selling_climax(ctx: SignalContext, i: int) -> Optional[bool]:
+    return _wyckoff_flag(ctx, i, "selling_climax")
+
+
+def wy_spring(ctx: SignalContext, i: int) -> Optional[bool]:
+    return _wyckoff_flag(ctx, i, "spring")
+
+
+def wy_no_supply(ctx: SignalContext, i: int) -> Optional[bool]:
+    return _wyckoff_flag(ctx, i, "no_supply")
+
+
+def wy_secondary_test(ctx: SignalContext, i: int) -> Optional[bool]:
+    return _wyckoff_flag(ctx, i, "secondary_test")
+
+
+WYCKOFF_CONDITIONS = tuple(f"wy_{name}" for name in wyckoff.EVENTS)
+
+
 LEGACY_CONDITIONS = ("c1", "c2", "c3_legacy", "c4", "c5")
 CORRECTED_CONDITIONS = ("c1", "c2", "c3", "c4", "c5")
 DISTRIBUTION_CONDITIONS = ("d1", "d2", "d3", "d4", "d5")
@@ -591,6 +622,14 @@ def register_builtins() -> None:
                    "accumulation", "the composite with every condition satisfiable"),
         SignalSpec("accumulation_high_conviction", "5/5 conditions and reward/risk > 2.0", accumulation_high_conviction,
                    "accumulation", "the legacy 'high conviction' tier, made reachable"),
+        SignalSpec("wy_selling_climax", "Wyckoff selling climax (stopping volume)", wy_selling_climax, "wyckoff",
+                   hypothesis=wyckoff.DEFINITIONS["selling_climax"]),
+        SignalSpec("wy_spring", "Wyckoff spring (undercut and recovery, low volume)", wy_spring, "wyckoff",
+                   hypothesis=wyckoff.DEFINITIONS["spring"]),
+        SignalSpec("wy_no_supply", "VSA no supply (narrow down bar, low volume)", wy_no_supply, "wyckoff",
+                   hypothesis=wyckoff.DEFINITIONS["no_supply"]),
+        SignalSpec("wy_secondary_test", "Wyckoff secondary test of a selling climax", wy_secondary_test, "wyckoff",
+                   hypothesis=wyckoff.DEFINITIONS["secondary_test"]),
         SignalSpec("distribution_corrected", "Distribution signal (≥4/5 bearish mirrors)", distribution_corrected,
                    "distribution", "the exit side the guide asks for"),
     ]

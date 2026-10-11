@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Wyckoff / VSA accumulation events, calibrated** (`core.analysis.wyckoff`,
+  four conditions `wy_selling_climax`, `wy_spring`, `wy_no_supply`,
+  `wy_secondary_test`, registered in the signal registry and measured by the
+  same engine as every other condition; kept out of the default batch so earlier
+  results are unchanged). Each event is causal (verified by truncation
+  invariance) and its parameters were fixed before measurement. New read-only
+  MCP tool `egx_wyckoff_state(symbol)` returns recent events with their measured
+  verdicts. It is a measured state, not a trade instruction. MCP tool count: 45.
+
+  **Controls (synthetic, 20 seeds, not EGX data).** On noise, 4 of 80 event
+  verdicts were VALIDATED (5%), against nominal alpha 0.10. With a planted
+  post-event drift of 0.25%/day over 8 sessions, `selling_climax` was VALIDATED
+  in 12 of 20 seeds, and 4 of 20 for `secondary_test`. At 0.10%/day it fell to
+  4 of 20. A placebo condition at random dates gave 1 of 20 VALIDATED.
+
+  **Findings that limit the claim.** Walk-forward did not reject any of the four
+  noise VALIDATED verdicts I checked (MODERATE, MODERATE, ROBUST, ROBUST), so it
+  is not an independent guard in this design. Excess hit rates on noise reached
+  8–20 points with 75–270 events, wider than the placebo's ±6. Episode-level
+  de-clustering (first event per 10-session episode, rule fixed before results)
+  did not remove the noise verdicts and reduced power, so it was rejected.
+
+  **Not built from the proposed plan, and why:** order-book, market-delta and
+  footprint-from-ticks signals (no free official EGX source found); block trades,
+  insider trades and institutional holdings (no verified structured free
+  source; holdings are periodic); iceberg and spoofing detection (need order-book
+  data); a `smart_decide` verdict with position sizing (a trade recommendation
+  with uncalibrated thresholds); any broker or third-party execution API.
+  Market Profile already exists in the smart-money engine.
+
+### Added
 - **Sector calibration** (`tradingview_mcp.core.calibration.sectors`, MCP tool
   `egx_sector_calibration`, `python scripts/egx_calibrate.py --sectors`). Replays
   the sector scanner's Hot/Cold labels and its three continuous scores (momentum,
