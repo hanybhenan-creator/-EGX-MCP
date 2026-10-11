@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Sector calibration** (`tradingview_mcp.core.calibration.sectors`, MCP tool
+  `egx_sector_calibration`, `python scripts/egx_calibrate.py --sectors`). Replays
+  the sector scanner's Hot/Cold labels and its three continuous scores (momentum,
+  20-session return, 5-session reversal) over stored history. Excess is measured
+  against the same-date average sector, with block-permutation p-values, a
+  Benjamini–Hochberg correction across the eight rules, walk-forward folds for
+  rules that reach SUGGESTIVE or VALIDATED, and a cross-sectional information
+  coefficient per score. The scanner's rules now live in
+  `core.analysis.sector_rotation`, shared by the live scanner and the calibration,
+  so the two cannot drift apart. The Wilder RSI used by the scanner has a series
+  form (`wilder_rsi_series`); it matches a pandas `ewm` reference exactly by about
+  session 200, and the earlier sessions differ only through the SMA seed. Round-trip cost is user-supplied (`--cost`, default 0 = gross);
+  the tool does not assume a commission or stamp-duty figure. MCP tool count: 44.
+
+  **Known limits (stated, not hidden).** Per-sector shuffling does not preserve
+  the cross-sectional zero-sum of excess returns, so p-values are approximate.
+  Sector membership is a manual, non-point-in-time classification. The IC t-test
+  is parametric and not corrected across scores or dates. Two of 60 IC verdicts
+  on noise were PREDICTIVE (3.3%), and walk-forward gave MODERATE or ROBUST on 4
+  of 75 noise runs (about 5%), so a walk-forward pass is not a verdict on its own.
+
+  **Power and false positives (synthetic controls, 6 sectors × 4 members, 420
+  sessions; not EGX data).** Innovation scale `drift_scale` 0.0005 (latent
+  sector drift s.d. ≈ 0.2% per session) is VALIDATED in 3 of 4 seeds. `drift_scale`
+  0.00025 (≈ 0.1%) reaches SUGGESTIVE in 2 of 4 seeds and is never VALIDATED.
+  `drift_scale` 0.0001 or less is not detected. On noise over 20 seeds, 1 of 160 rule
+  verdicts was VALIDATED (0.6%, `momentum_20d_top_third`, seed 116). Test fixtures
+  use seeds 1–3 for the noise checks.
+
+  **Fixed in this round:** with `permutations=0` the sector test had been drawing
+  one null sample, which fabricated a p-value of 0.5. Now no null is drawn, p and q
+  are reported as `—`, and the report warns that no rule can be VALIDATED.
 - **Institutional footprint layer** (`tradingview_mcp.core.analysis.footprints`).
   The "volume rises while price stays flat" design from the architecture guide,
   implemented over stored bars with no indicators: volume anomalies against a

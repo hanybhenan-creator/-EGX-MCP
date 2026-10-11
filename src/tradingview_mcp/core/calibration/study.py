@@ -586,12 +586,16 @@ def walk_forward(
     retention = (sum(test_edges) / total_train) if total_train else None
     if retention is None:
         return WalkForward(signal, sample.horizon, out, None, "NO_TRAIN_EDGE", "retention not computable")
-    if retention >= 0.8:
-        verdict, reason = "ROBUST", "out-of-sample excess retains at least 80% of the in-sample edge"
-    elif retention >= 0.5:
-        verdict, reason = "MODERATE", "out-of-sample excess retains 50-80% of the in-sample edge"
-    elif retention >= 0.2:
-        verdict, reason = "WEAK", "most of the in-sample edge does not survive out-of-sample"
-    else:
-        verdict, reason = "OVERFITTED", "out-of-sample excess is under 20% of the in-sample edge"
+    verdict, reason = retention_verdict(retention)
     return WalkForward(signal, sample.horizon, out, retention, verdict, reason)
+
+
+def retention_verdict(retention: float) -> tuple[str, str]:
+    """Shared thresholds for every walk-forward in the engine (events and sectors)."""
+    if retention >= 0.8:
+        return "ROBUST", "out-of-sample excess retains at least 80% of the in-sample edge"
+    if retention >= 0.5:
+        return "MODERATE", "out-of-sample excess retains 50-80% of the in-sample edge"
+    if retention >= 0.2:
+        return "WEAK", "most of the in-sample edge does not survive out-of-sample"
+    return "OVERFITTED", "out-of-sample excess is under 20% of the in-sample edge"

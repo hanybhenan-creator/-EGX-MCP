@@ -63,6 +63,9 @@ from tradingview_mcp.core.services.smart_money_service import (
 from tradingview_mcp.core.services.egx_data_service import (
     egx_data_status as _egx_data_status,
 )
+from tradingview_mcp.core.services.egx_sector_calibration_service import (
+    egx_sector_calibration as _egx_sector_calibration,
+)
 from tradingview_mcp.core.services.egx_calibration_service import (
     egx_signal_calibration as _egx_signal_calibration,
     egx_calibration_signals as _egx_calibration_signals,
@@ -638,6 +641,58 @@ def egx_data_status(index: str = "EGX30", sample: int = 10) -> dict:
         return _egx_data_status(index=index, sample=sample)
     except Exception as e:
         return exception_to_envelope(e, context="egx_data_status")
+
+
+@mcp.tool(annotations=ToolAnnotations(title="EGX Sector Calibration", readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+def egx_sector_calibration(
+    horizon: int = 5,
+    min_members: int = 3,
+    permutations: int = 200,
+    walk_forward_folds: int = 3,
+    round_trip_cost: float = 0.0,
+    lookback_days: int = 1500,
+) -> dict:
+    """Does the sector scanner's ranking predict anything on EGX history?
+
+    The live sector scanner labels sectors Hot / Warming / Cooling / Cold and says
+    money is "rotating into" the Hot ones. This tool replays those exact rules over
+    stored history and measures what followed:
+
+      - Hot and Cold labels: did Hot sectors beat the average sector, and did Cold
+        ones trail it, over the next `horizon` sessions?
+      - the top and bottom third of three continuous scores (the scanner's 0-100
+        momentum score, trailing 20-session return, and trailing 5-session
+        reversal) on each date
+      - rank quality: the information coefficient (cross-sectional rank correlation
+        with forward return) per score, with a t-statistic and sign consistency
+
+    Excess is measured against the same-date average sector, so a market-wide move
+    cannot look like a rotation. Verdicts use the same rules as the stock engine
+    (VALIDATED / SUGGESTIVE / REJECTED / NO_EVENTS), with Benjamini-Hochberg
+    correction across the batch. Also returns each sector's current label and the
+    calibrated verdict of that label.
+
+    Runs on the local store only. Sector membership is a manual classification.
+
+    Args:
+        horizon: sessions held after observation (1-60).
+        min_members: members with data needed for a sector to count on a session (2-10).
+        permutations: block-shuffle permutations per rule (0-2000).
+        walk_forward_folds: 0 to skip, otherwise 2-6.
+        round_trip_cost: fraction deducted per event (0-0.2). Default 0 = gross.
+        lookback_days: history to read from the store (60-5000).
+    """
+    try:
+        return _egx_sector_calibration(
+            horizon=horizon,
+            min_members=min_members,
+            permutations=permutations,
+            walk_forward_folds=walk_forward_folds,
+            round_trip_cost=round_trip_cost,
+            lookback_days=lookback_days,
+        )
+    except Exception as e:
+        return exception_to_envelope(e, context="egx_sector_calibration")
 
 
 @mcp.tool(annotations=ToolAnnotations(title="EGX Signal Calibration", readOnlyHint=True, destructiveHint=False, openWorldHint=False))

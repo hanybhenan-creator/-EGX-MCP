@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+from tradingview_mcp.core.analysis.sector_rotation import classify_status, momentum_score
 from tradingview_mcp.core.services.coinlist import load_symbols
 from tradingview_mcp.core.services.indicators import (
     compute_metrics,
@@ -230,30 +231,9 @@ def scan_egx_sector(sector: str = "", timeframe: str = "1D", limit: int = 20) ->
 
 # ── Sector Rotation Scanner ────────────────────────────────────────────────────
 
-def _compute_sector_momentum_score(
-    avg_change: float,
-    avg_rsi: float,
-    breadth_pct: float,
-    volume_flow_positive: bool,
-    change_rank_pct: float,
-) -> int:
-    """Compute a 0–100 sector momentum score from four components."""
-    change_pts = round(change_rank_pct * 30)
-
-    if 50 <= avg_rsi <= 70:
-        rsi_pts = 25
-    elif 40 <= avg_rsi < 50 or 70 < avg_rsi <= 80:
-        rsi_pts = 15
-    elif 30 <= avg_rsi < 40:
-        rsi_pts = 10
-    elif avg_rsi > 80:
-        rsi_pts = 5
-    else:
-        rsi_pts = 8
-
-    breadth_pts = round(min(breadth_pct, 100) / 100 * 25)
-    volume_pts = 20 if volume_flow_positive else 0
-    return max(0, min(100, change_pts + rsi_pts + breadth_pts + volume_pts))
+# The scoring rule lives in core/analysis/sector_rotation.py so the calibration
+# replays the same definition. These names are kept for existing callers.
+_compute_sector_momentum_score = momentum_score
 
 
 def _generate_rotation_signals(ranked_sectors: list) -> List[str]:
@@ -447,14 +427,12 @@ def run_egx_sector_scanner(
             change_rank_pct=change_rank_map.get(sector_key, 0.5),
         )
         agg["momentum_score"] = momentum
-        if momentum >= 65 and agg["volume_flow_positive"]:
-            agg["status"] = "Hot"
-        elif momentum >= 50 or (agg["avg_change"] > 0 and agg["breadth_pct"] > 50):
-            agg["status"] = "Warming"
-        elif momentum >= 35 and not agg["volume_flow_positive"]:
-            agg["status"] = "Cooling"
-        else:
-            agg["status"] = "Cold"
+        agg["status"] = classify_status(
+            momentum,
+            agg["avg_change"],
+            agg["breadth_pct"],
+            agg["volume_flow_positive"],
+        )
 
     # Build heatmap
     heatmap: List[dict] = []
