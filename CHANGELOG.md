@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Stock classes** (`core.analysis.stock_classes`, `egx_classify_stocks`): each
+  stock is measured over its last 60 sessions (traded value, sessions with no
+  trading, gap frequency, efficiency ratio, volatility) and placed in one class:
+  DORMANT, GAP_PRONE, TRENDING, RANGE_BOUND, MIXED or UNCLASSIFIED. A class
+  changes only after 5 consecutive sessions. Read-only. No tool is validated for
+  any class yet, so every class's allowed-tools list is empty. Thresholds are
+  provisional and not yet checked on real EGX data. See `docs/STOCK_CLASSES.md`.
 - **`egx_price_levels`** replaces `egx_trade_plan`. It reports the current
   indicator readings, candidate support and resistance levels, and the distance
   to the nearest level on each side. It no longer returns a recommendation,

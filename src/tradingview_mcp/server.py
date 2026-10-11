@@ -66,6 +66,9 @@ from tradingview_mcp.core.services.egx_data_service import (
 from tradingview_mcp.core.services.egx_wyckoff_state_service import (
     egx_symbol_events as _egx_wyckoff_state,
 )
+from tradingview_mcp.core.services.egx_stock_classes_service import (
+    egx_classify_stocks as _egx_classify_stocks,
+)
 from tradingview_mcp.core.services.egx_sector_calibration_service import (
     egx_sector_event_study as _egx_sector_calibration,
 )
@@ -825,6 +828,46 @@ def egx_list_events() -> dict:
         return _egx_calibration_signals()
     except Exception as e:
         return exception_to_envelope(e, context="egx_list_events")
+
+
+@mcp.tool(annotations=ToolAnnotations(title="EGX Stock Classes", readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+def egx_classify_stocks(
+    symbols: str = "",
+    index: str = "",
+    max_symbols: int = 200,
+    lookback_days: int = 400,
+) -> dict:
+    """Group EGX stocks by how they have actually behaved, and show which tools each group may use.
+
+    Each stock is measured over its last 60 sessions for: how much it trades (median
+    traded value, sessions with no trading), how often it opens far from the previous
+    close (gaps), how directly it moves (efficiency ratio: 1.0 is a straight line, near
+    0 is back-and-forth), and how volatile it is. From these it gets one class:
+    DORMANT, GAP_PRONE, TRENDING, RANGE_BOUND, MIXED, or UNCLASSIFIED.
+
+    A stock moves to a new class only after the new class holds for 5 consecutive
+    sessions, so one noisy day does not move it. The response lists each stock's class,
+    the reason, its recent class changes, and the tools allowed for that class. Right
+    now no tool is validated for any class, so the allowed list is empty. Read the
+    glossary in the response for every term.
+
+    Read-only. Uses the local store; run `python scripts/egx_data_sync.py daily --index EGX30 --days 365` first.
+
+    Args:
+        symbols: explicit EGX tickers, comma or semicolon separated.
+        index: EGX30 | EGX70 | EGX100 | SHARIAH33 | EGX35LV | TAMAYUZ.
+        max_symbols: cap on stocks classified (1-400).
+        lookback_days: calendar days of stored history to read (at least 120 for a useful result).
+    """
+    try:
+        return _egx_classify_stocks(
+            symbols=symbols,
+            index=index,
+            max_symbols=max_symbols,
+            lookback_days=lookback_days,
+        )
+    except Exception as e:
+        return exception_to_envelope(e, context="egx_classify_stocks")
 
 
 @mcp.tool(annotations=ToolAnnotations(title="EGX Accumulation Fingerprint", readOnlyHint=True, destructiveHint=False, openWorldHint=False))

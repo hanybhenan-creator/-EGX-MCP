@@ -30,7 +30,8 @@ OpenCode) that have no project context. Read this file before changing anything.
 src/tradingview_mcp/
   server.py                 MCP tool registry (FastMCP). Thin wrappers only.
   core/data/                EGX data layer: sources, router, store (SQLite), quality, provenance.
-  core/analysis/            Pure analysis: sector_rotation.py, footprints.py, wyckoff.py
+  core/analysis/            Pure analysis: sector_rotation.py, footprints.py, wyckoff.py,
+                            moneyflow.py (CMF, MFI, VPT, RVOL, anchored VWAP), stock_classes.py
   core/calibration/         Event study engine: signals.py (registry), study.py (hit rate,
                             permutation p, walk-forward, BH), sectors.py, glossary.py,
                             stats.py (Wilson interval and BH via statsmodels/scipy)

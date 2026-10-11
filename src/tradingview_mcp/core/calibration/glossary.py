@@ -53,6 +53,27 @@ WYCKOFF_GLOSSARY: dict[str, str] = {
 }
 
 
+CLASSIFICATION_GLOSSARY: dict[str, str] = {
+    "stock_class": "A group describing how a stock has behaved over the last window of sessions: thinly traded, gap-prone, trending, range-bound, mixed, or unclassified.",
+    "official_class": "The class in force. A new class only becomes official after it holds for several consecutive sessions, so one noisy day does not move a stock.",
+    "raw_class": "The class that today's measurements alone would give, before the confirmation rule.",
+    "DORMANT": "Trades on too few sessions, or its median traded value is below the liquidity floor. Volume-based measures are not used for it.",
+    "GAP_PRONE": "Opens far from the previous close on many sessions. Open-based measures would mostly measure the gap.",
+    "TRENDING": "Price moves mostly in one direction over the window (efficiency ratio at or above the trend threshold).",
+    "RANGE_BOUND": "Price moves back and forth without net progress (efficiency ratio at or below the range threshold).",
+    "MIXED": "Between trending and range-bound. No specific hypothesis is attached to this class.",
+    "UNCLASSIFIED": "Not enough complete history in the window to describe the stock. Nothing is inferred.",
+    "efficiency_ratio": "Net price change over the window divided by the total distance travelled. 1.0 is a straight line; near 0 is back-and-forth movement.",
+    "median_traded_value": "Median of close × volume per session over the window, in EGP.",
+    "zero_volume_share": "Share of sessions in the window with no trading.",
+    "gap_share": "Share of sessions whose opening price differs from the previous close by at least the gap threshold.",
+    "daily_volatility": "Standard deviation of daily returns over the window.",
+    "HIGH_VOLATILITY": "A flag, not a class: daily volatility at or above the high-volatility threshold.",
+    "allowed_tools": "Tools validated for this class on held-out data. Empty means none has been validated yet, so none should be used for this stock.",
+    "excluded_tools": "Tools that the class's assumptions rule out, with the reason.",
+    "validation": "A tool passes for a class only through the calibration engine on data it was not tuned on.",
+}
+
 def attach_glossary(payload: dict[str, Any], glossary: dict[str, str]) -> dict[str, Any]:
     """Return ``payload`` with a ``glossary`` key (copied, not mutated)."""
     out = dict(payload)
