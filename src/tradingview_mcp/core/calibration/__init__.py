@@ -11,8 +11,9 @@ block permutation, a q-value corrected for the number of signals tested, and
 whether the edge survived out-of-sample. That is the difference between
 "confidence: 87" and a number somebody can check.
 
-The engine is deliberately dependency-free (no numpy/pandas) and reads plain
-bar dictionaries, so it runs directly on the data layer's ``DataStore``.
+Indicators are plain Python; statistics come from scipy and statsmodels (BSD-3).
+It reads plain bar dictionaries, so it runs directly on the data layer's
+``DataStore``.
 """
 
 from __future__ import annotations

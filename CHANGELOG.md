@@ -11,7 +11,7 @@ All notable changes to this project will be documented in this file.
   same engine as every other condition; kept out of the default batch so earlier
   results are unchanged). Each event is causal (verified by truncation
   invariance) and its parameters were fixed before measurement. New read-only
-  MCP tool `egx_wyckoff_state(symbol)` returns recent events with their measured
+  MCP tool `egx_symbol_events(symbol)` returns recent events with their measured
   verdicts. It is a measured state, not a trade instruction. MCP tool count: 45.
 
   **Controls (synthetic, 20 seeds, not EGX data).** On noise, 4 of 80 event
@@ -37,7 +37,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - **Sector calibration** (`tradingview_mcp.core.calibration.sectors`, MCP tool
-  `egx_sector_calibration`, `python scripts/egx_calibrate.py --sectors`). Replays
+  `egx_sector_event_study`, `python scripts/egx_calibrate.py --sectors`). Replays
   the sector scanner's Hot/Cold labels and its three continuous scores (momentum,
   20-session return, 5-session reversal) over stored history. Excess is measured
   against the same-date average sector, with block-permutation p-values, a
@@ -122,10 +122,11 @@ All notable changes to this project will be documented in this file.
   - an explicit verdict per signal: VALIDATED (enough events, positive excess,
     q ≤ 0.10) / SUGGESTIVE / REJECTED / NO_EVENTS.
 
-  Stdlib only (no numpy/pandas), so it runs directly over the data layer's
-  stored bars; third-party conditions join by registering a `SignalSpec`.
-- **New MCP tools** `egx_signal_calibration` (measure conditions against the
-  local store — read-only, works offline) and `egx_calibration_signals`
+  Indicators are plain Python and run directly over the data layer's stored
+  bars; the statistics use `scipy` and `statsmodels` (both BSD-3); third-party
+  conditions join by registering a `SignalSpec`.
+- **New MCP tools** `egx_event_study` (measure conditions against the
+  local store — read-only, works offline) and `egx_list_events`
   (catalogue with each signal's hypothesis).
 - **`scripts/egx_calibrate.py`** — the same engine from the shell, with
   `--list`, per-signal selection, configurable horizon/permutations/folds, and

@@ -64,14 +64,14 @@ from tradingview_mcp.core.services.egx_data_service import (
     egx_data_status as _egx_data_status,
 )
 from tradingview_mcp.core.services.egx_wyckoff_state_service import (
-    egx_wyckoff_state as _egx_wyckoff_state,
+    egx_symbol_events as _egx_wyckoff_state,
 )
 from tradingview_mcp.core.services.egx_sector_calibration_service import (
-    egx_sector_calibration as _egx_sector_calibration,
+    egx_sector_event_study as _egx_sector_calibration,
 )
 from tradingview_mcp.core.services.egx_calibration_service import (
-    egx_signal_calibration as _egx_signal_calibration,
-    egx_calibration_signals as _egx_calibration_signals,
+    egx_event_study as _egx_signal_calibration,
+    egx_list_events as _egx_calibration_signals,
 )
 from tradingview_mcp.core.services.egx_footprint_service import (
     egx_accumulation_fingerprint as _egx_accumulation_fingerprint,
@@ -646,8 +646,8 @@ def egx_data_status(index: str = "EGX30", sample: int = 10) -> dict:
         return exception_to_envelope(e, context="egx_data_status")
 
 
-@mcp.tool(annotations=ToolAnnotations(title="EGX Wyckoff State", readOnlyHint=True, destructiveHint=False, openWorldHint=False))
-def egx_wyckoff_state(
+@mcp.tool(annotations=ToolAnnotations(title="EGX Symbol Events", readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+def egx_symbol_events(
     symbol: str,
     lookback_sessions: int = 5,
     horizon: int = 5,
@@ -656,25 +656,27 @@ def egx_wyckoff_state(
     permutations: int = 200,
     walk_forward_folds: int = 3,
 ) -> dict:
-    """Which Wyckoff / VSA accumulation events fired on a stock recently, and what they measured.
+    """Which Wyckoff-style accumulation events happened on one EGX stock recently, and how each event type performed historically.
 
-    Events (defined over OHLCV only, causal, parameters fixed before measurement):
-    selling_climax, spring, no_supply, secondary_test. Each recent event carries its
-    calibrated verdict from the same run that measures every other signal: hit rate
-    against the base rate, excess, q-value, and walk-forward verdict.
+    Four event types, all computed from daily open, high, low, close and volume only:
+    selling_climax, spring, no_supply, secondary_test. For each recent event this returns
+    its measured track record across the stored EGX sample: hit_rate (share of past
+    events followed by a positive return over the horizon), base_rate (the same share
+    for a random stock on a random day), excess_hit, q_value (multiple-testing
+    adjusted p-value) and walk_forward verdict (did the edge hold on later, unseen data).
 
-    Returns a measured state, not a trade instruction. Walk-forward did not reliably
-    reject noise on the synthetic controls, so treat VALIDATED as one piece of evidence.
+    Returns a measured state, not a buy or sell instruction. The response includes a
+    glossary that defines every verdict and number. Walk-forward did not reliably reject
+    noise on synthetic test data, so treat a VALIDATED verdict as one piece of evidence.
 
     Args:
         symbol: EGX ticker, e.g. COMI.
         lookback_sessions: how many recent sessions to scan for events (1-20).
-        horizon: sessions held after the event for measurement (entry next open).
-        index: optional EGX index to define the calibration universe (EGX30, ...).
-        lookback_days: history to read from the store.
-        permutations: block-permutation count for the calibration (0-2000).
-        walk_forward_folds: 0 to skip, otherwise 2-6.
-    """
+        horizon: sessions held after each event before measuring the return (entry at next open).
+        index: optional EGX index that defines the comparison universe (EGX30, EGX70, ...).
+        lookback_days: calendar days of stored history to read.
+        permutations: block-shuffle permutations used for p-values (0-2000).
+        walk_forward_folds: 0 to skip the out-of-sample check, otherwise 2-6."""
     try:
         return _egx_wyckoff_state(
             symbol=symbol,
@@ -686,11 +688,11 @@ def egx_wyckoff_state(
             walk_forward_folds=walk_forward_folds,
         )
     except Exception as e:
-        return exception_to_envelope(e, context="egx_wyckoff_state")
+        return exception_to_envelope(e, context="egx_symbol_events")
 
 
-@mcp.tool(annotations=ToolAnnotations(title="EGX Sector Calibration", readOnlyHint=True, destructiveHint=False, openWorldHint=False))
-def egx_sector_calibration(
+@mcp.tool(annotations=ToolAnnotations(title="EGX Sector Event Study", readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+def egx_sector_event_study(
     horizon: int = 5,
     min_members: int = 3,
     permutations: int = 200,
@@ -698,36 +700,34 @@ def egx_sector_calibration(
     round_trip_cost: float = 0.0,
     lookback_days: int = 1500,
 ) -> dict:
-    """Does the sector scanner's ranking predict anything on EGX history?
+    """Would ranking EGX sectors by their recent momentum have predicted which sectors outperformed?
 
-    The live sector scanner labels sectors Hot / Warming / Cooling / Cold and says
-    money is "rotating into" the Hot ones. This tool replays those exact rules over
-    stored history and measures what followed:
+    The live sector scanner labels each sector Hot, Warming, Cooling or Cold, and says
+    money is rotating into the Hot ones. This tool replays those same rules on stored
+    history and measures what happened next:
 
       - Hot and Cold labels: did Hot sectors beat the average sector, and did Cold
-        ones trail it, over the next `horizon` sessions?
-      - the top and bottom third of three continuous scores (the scanner's 0-100
-        momentum score, trailing 20-session return, and trailing 5-session
-        reversal) on each date
-      - rank quality: the information coefficient (cross-sectional rank correlation
-        with forward return) per score, with a t-statistic and sign consistency
+        sectors trail it, over the next `horizon` sessions? Excess return is measured
+        against the average of all sectors on the same date, so a market-wide move
+        cannot look like a rotation.
+      - top and bottom third on three continuous scores (the scanner's momentum score,
+        trailing 20-session return, and trailing 5-session return).
+      - information_coefficient per score: the per-date Spearman rank correlation
+        between the score and the next-horizon excess return, with a t-statistic and
+        sign consistency.
 
-    Excess is measured against the same-date average sector, so a market-wide move
-    cannot look like a rotation. Verdicts use the same rules as the stock engine
-    (VALIDATED / SUGGESTIVE / REJECTED / NO_EVENTS), with Benjamini-Hochberg
-    correction across the batch. Also returns each sector's current label and the
-    calibrated verdict of that label.
-
-    Runs on the local store only. Sector membership is a manual classification.
+    Each rule gets a verdict: VALIDATED, SUGGESTIVE, REJECTED or NO_EVENTS, with
+    Benjamini-Hochberg correction across the batch. The response includes a glossary
+    that defines every verdict and number. Runs on the local store only. Sector
+    membership is a manual classification of EGX stocks.
 
     Args:
-        horizon: sessions held after observation (1-60).
-        min_members: members with data needed for a sector to count on a session (2-10).
+        horizon: sessions held after the observation date (1-60).
+        min_members: members with data required for a sector to count on a date (2-10).
         permutations: block-shuffle permutations per rule (0-2000).
-        walk_forward_folds: 0 to skip, otherwise 2-6.
-        round_trip_cost: fraction deducted per event (0-0.2). Default 0 = gross.
-        lookback_days: history to read from the store (60-5000).
-    """
+        walk_forward_folds: 0 to skip the out-of-sample check, otherwise 2-6.
+        round_trip_cost: transaction cost as a fraction per event (0-0.2). Default 0 means gross returns.
+        lookback_days: calendar days of stored history to read (60-5000)."""
     try:
         return _egx_sector_calibration(
             horizon=horizon,
@@ -738,11 +738,11 @@ def egx_sector_calibration(
             lookback_days=lookback_days,
         )
     except Exception as e:
-        return exception_to_envelope(e, context="egx_sector_calibration")
+        return exception_to_envelope(e, context="egx_sector_event_study")
 
 
-@mcp.tool(annotations=ToolAnnotations(title="EGX Signal Calibration", readOnlyHint=True, destructiveHint=False, openWorldHint=False))
-def egx_signal_calibration(
+@mcp.tool(annotations=ToolAnnotations(title="EGX Event Study", readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+def egx_event_study(
     signal: str = "",
     horizon: int = 5,
     symbols: str = "",
@@ -752,44 +752,42 @@ def egx_signal_calibration(
     permutations: int = 300,
     walk_forward_folds: int = 3,
 ) -> dict:
-    """What the EGX smart-money conditions actually predicted, measured.
+    """Test EGX trading conditions against stored price history and report measured results.
 
-    Every condition in this server's EGX analysis (POC below price, buy/sell
-    ratio > 1.5, 20-day breakout, OBV/ADL confirmation) is a *hypothesis*.
-    This tool tests them against the stored history and returns calibrated
-    numbers instead of point estimates:
+    Each condition is a stated hypothesis (for example: "price closes above its 20-day
+    high"). This tool counts how often it fired and what happened over the next
+    `horizon` sessions, then returns statistics instead of a single opinion:
 
-      - events: how many times the condition fired, over how many symbols and
-        distinct dates
-      - hit_rate with a 95% Wilson interval, next to the sample's base_rate
-        (what you would have got buying a random symbol on a random session)
-      - excess_hit: the difference that the condition's timing is responsible for
-      - p_value: circular block permutation — "given this sequence of returns,
-        how surprising is the signal's timing?"
-      - q_value: Benjamini-Hochberg correction across every signal measured in
-        the run, because testing a dozen conditions on one history always
-        produces a 'significant' one by chance
-      - walk_forward: in-sample vs contiguous out-of-sample folds, with a
-        ROBUST / MODERATE / WEAK / OVERFITTED verdict
+      - events: how many times the condition fired, across how many symbols and dates.
+      - hit_rate: share of events followed by a positive return. Its 95% Wilson
+        interval shows how uncertain that share is.
+      - base_rate: the same share for a random stock on a random day in the sample.
+      - excess_hit: hit_rate minus base_rate. Positive means the condition beat chance.
+      - p_value: from a block permutation of each symbol's return series. Small values
+        mean the timing of the signal matters more than chance would produce.
+      - q_value: the p-value adjusted (Benjamini-Hochberg) for testing many conditions
+        in one run. Testing a dozen conditions on one history will always produce one
+        "significant" result by chance, so use q_value, not p_value, to judge.
+      - walk_forward: the edge measured on earlier folds and then on later, unseen
+        folds, with a ROBUST / MODERATE / WEAK / OVERFITTED verdict.
+      - verdict per condition: VALIDATED (at least 30 events, positive excess, q_value
+        at most 0.10), SUGGESTIVE (positive but not enough evidence yet), REJECTED
+        (excess is zero or negative), NO_EVENTS (never fired in the sample).
 
-    Runs entirely on the local store (no network). Requires daily history:
-    run `python scripts/egx_data_sync.py daily --index EGX30 --days 365` once
-    first. Signals with zero events are reported as NO_EVENTS rather than
-    silently dropped — check them: the legacy 20-day-breakout condition is
-    arithmetically unsatisfiable and this is where that shows up.
+    Runs entirely on the local store (no network). Requires daily history: run
+    `python scripts/egx_data_sync.py daily --index EGX30 --days 365` once first. The
+    response includes a glossary that defines every term. Conditions with zero events
+    are reported as NO_EVENTS rather than dropped.
 
     Args:
-        signal: One signal name, or empty to measure the default batch.
-        horizon: Sessions held after the signal (entry next session's open).
-        symbols: Explicit EGX tickers, comma or semicolon separated.
+        signal: one condition name, or empty to measure the default batch. Use egx_list_events to see names.
+        horizon: sessions held after the signal (entry at the next session's open).
+        symbols: explicit EGX tickers, comma or semicolon separated.
         index: EGX30 | EGX70 | EGX100 | SHARIAH33 | EGX35LV | TAMAYUZ.
-        lookback_days: How far back to read the local store. The volume
-            profile needs 120 sessions, so a short window makes long-memory
-            signals report NO_EVENTS for lack of history, not lack of signal.
-        max_symbols: Cap on symbols analysed (1-400).
-        permutations: Block-permutation rounds per signal (0 disables p-values).
-        walk_forward_folds: Out-of-sample folds (0 disables walk-forward).
-    """
+        lookback_days: calendar days of stored history to read. Some conditions need about 120 sessions of history, so a short window reports NO_EVENTS.
+        max_symbols: cap on symbols analysed (1-400).
+        permutations: block-shuffle rounds per condition (0 disables p-values).
+        walk_forward_folds: out-of-sample folds (0 disables walk-forward)."""
     try:
         return _egx_signal_calibration(
             signal=signal,
@@ -802,22 +800,22 @@ def egx_signal_calibration(
             walk_forward_folds=walk_forward_folds,
         )
     except Exception as e:
-        return exception_to_envelope(e, context="egx_signal_calibration")
+        return exception_to_envelope(e, context="egx_event_study")
 
 
-@mcp.tool(annotations=ToolAnnotations(title="EGX Calibration Signals", readOnlyHint=True, destructiveHint=False, openWorldHint=False))
-def egx_calibration_signals() -> dict:
-    """List the registered EGX signals and the hypothesis each one is tested against.
+@mcp.tool(annotations=ToolAnnotations(title="EGX List Events", readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+def egx_list_events() -> dict:
+    """List the EGX trading conditions that egx_event_study can test, with the hypothesis behind each.
 
-    Use this to pick a ``signal`` argument for ``egx_signal_calibration``, and
-    to see the distinction between the legacy conditions (as shipped) and the
-    corrected ones. Third-party code can add conditions by registering a
-    ``SignalSpec`` — calibration discovers them automatically.
+    Use this to find valid `signal` names for egx_event_study. Each entry states what
+    the condition is supposed to detect, and whether it is a legacy condition (kept as
+    originally shipped for comparison) or a corrected one. Additional conditions can be
+    added in code by registering a SignalSpec, and they appear here automatically.
     """
     try:
         return _egx_calibration_signals()
     except Exception as e:
-        return exception_to_envelope(e, context="egx_calibration_signals")
+        return exception_to_envelope(e, context="egx_list_events")
 
 
 @mcp.tool(annotations=ToolAnnotations(title="EGX Accumulation Fingerprint", readOnlyHint=True, destructiveHint=False, openWorldHint=False))
@@ -846,7 +844,7 @@ def egx_accumulation_fingerprint(
 
     Returns a described state, not a probability: `footprint_score` and the
     preparation scores are weighted flag sums. The **measured** hit rate of
-    these patterns comes from `egx_signal_calibration`.
+    these patterns comes from `egx_event_study`.
 
     Also reports a measured `data_quality` score (0-100) for the symbol built
     from calendar coverage, OHLCV structural integrity, freshness against the

@@ -7,7 +7,7 @@ ingestion layer fills. A signal's reputation is therefore reproducible offline
 — same database, same seed, same table — and it never claims more than the
 stored history can support.
 
-    egx_signal_calibration(signal="accumulation_corrected", horizon=5)
+    egx_event_study(signal="accumulation_corrected", horizon=5)
 
 returns, for that signal: events, sample window, hit rate with a 95% interval,
 the sample's base rate, the excess, a block-permutation p-value, a q-value
@@ -23,6 +23,7 @@ from tradingview_mcp.core.calibration import (
     Sample,
     analyze,
 )
+from tradingview_mcp.core.calibration.glossary import EVENT_GLOSSARY, attach_glossary
 from tradingview_mcp.core.data.factory import offline_mode
 from tradingview_mcp.core.errors import ErrorCode, make_error
 from tradingview_mcp.core.services.egx_data_service import _resolve_symbols
@@ -101,7 +102,7 @@ def _payload_warnings(bars_by_symbol: dict[str, list[dict]], horizon: int, *, fo
     return warnings
 
 
-def egx_signal_calibration(
+def egx_event_study(
     *,
     signal: str = "",
     horizon: int = 5,
@@ -209,10 +210,10 @@ def egx_signal_calibration(
             "here — not that it will persist."
         ),
     }
-    return payload
+    return attach_glossary(payload, EVENT_GLOSSARY)
 
 
-def egx_calibration_signals() -> dict[str, Any]:
+def egx_list_events() -> dict[str, Any]:
     """List the registered signals with the hypothesis each one is tested against."""
     from tradingview_mcp.core.calibration import all_signals
 

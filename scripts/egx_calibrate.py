@@ -34,11 +34,11 @@ VERDICT_ORDER = {"VALIDATED": 0, "SUGGESTIVE": 1, "REJECTED": 2, "NO_EVENTS": 3,
 def _load():
     from tradingview_mcp.core.services.egx_calibration_service import (
         DEFAULT_SIGNALS,
-        egx_calibration_signals,
-        egx_signal_calibration,
+        egx_list_events,
+        egx_event_study,
     )
 
-    return DEFAULT_SIGNALS, egx_calibration_signals, egx_signal_calibration
+    return DEFAULT_SIGNALS, egx_list_events, egx_event_study
 
 
 def _fmt(value, *, digits: int = 3, percent: bool = False) -> str:
@@ -167,10 +167,10 @@ def render_sector_table(payload: dict) -> str:
 
 def cmd_sectors(args: argparse.Namespace) -> int:
     from tradingview_mcp.core.data.factory import reset_layer
-    from tradingview_mcp.core.services.egx_sector_calibration_service import egx_sector_calibration
+    from tradingview_mcp.core.services.egx_sector_calibration_service import egx_sector_event_study
 
     reset_layer()
-    payload = egx_sector_calibration(
+    payload = egx_sector_event_study(
         horizon=args.horizon,
         permutations=args.permutations,
         walk_forward_folds=args.folds,

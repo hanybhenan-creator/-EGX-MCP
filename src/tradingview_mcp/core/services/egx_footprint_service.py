@@ -16,7 +16,7 @@ Two fabrications in the design document are replaced with real measurements:
   argued with.
 * ``breakout_probability`` and the composite scores are weighted flag sums, not
   probabilities. The measured probability lives in the calibration engine
-  (``egx_signal_calibration`` / ``scripts/egx_calibrate.py``), which reports
+  (``egx_event_study`` / ``scripts/egx_calibrate.py``), which reports
   what actually followed these footprints historically.
 
 Nothing here touches the network.
@@ -185,7 +185,7 @@ def egx_accumulation_fingerprint(
     volume, absorbed dips, breakout preparation, shakeout reclaims and the
     distribution mirror — and states plainly that the composite scores are
     weighted flags whose predictive value is measured separately by
-    ``egx_signal_calibration``.
+    ``egx_event_study``.
 
     Args:
       symbol: EGX ticker (``EGX:`` prefix and lowercase are accepted).
@@ -236,6 +236,6 @@ def egx_accumulation_fingerprint(
         "buy_volume/sell_volume are derived from the candle direction: EGX publishes no "
         "per-side volume, so they are an estimate, not observed order flow",
         "footprint_score/preparation_score/accumulation_strength are weighted flag sums; "
-        "their predictive value is what egx_signal_calibration measures",
+        "their predictive value is what egx_event_study measures",
     ]
     return payload

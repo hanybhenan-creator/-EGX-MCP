@@ -170,12 +170,12 @@ def test_method_mentions_approximate_pvalues():
 
 
 def test_service_rejects_bad_parameters():
-    from tradingview_mcp.core.services.egx_sector_calibration_service import egx_sector_calibration
+    from tradingview_mcp.core.services.egx_sector_calibration_service import egx_sector_event_study
 
-    out = egx_sector_calibration(horizon=0)
+    out = egx_sector_event_study(horizon=0)
     assert "error" in out
     assert "INVALID_PARAMETER" in json.dumps(out)
-    out = egx_sector_calibration(walk_forward_folds=1)
+    out = egx_sector_event_study(walk_forward_folds=1)
     assert "error" in out
 
 
@@ -185,7 +185,7 @@ def test_service_end_to_end_with_injected_bars(monkeypatch):
     bars, sector_of = sector_universe(planted=True, sectors=6, members=4, sessions=420, seed=7)
     monkeypatch.setattr(svc, "_load_bars", lambda symbols, *, lookback_days, max_symbols: (bars, []))
     monkeypatch.setattr(svc, "get_sector", sector_of.get)
-    out = svc.egx_sector_calibration(permutations=100, walk_forward_folds=0)
+    out = svc.egx_sector_event_study(permutations=100, walk_forward_folds=0)
     assert "error" not in out
     assert out["mode"] == "offline store"
     assert "momentum_20d_top_third" in out["validated_rules"]
@@ -196,7 +196,7 @@ def test_service_reports_no_data(monkeypatch):
     from tradingview_mcp.core.services import egx_sector_calibration_service as svc
 
     monkeypatch.setattr(svc, "_load_bars", lambda symbols, *, lookback_days, max_symbols: ({}, []))
-    out = svc.egx_sector_calibration(permutations=0, walk_forward_folds=0)
+    out = svc.egx_sector_event_study(permutations=0, walk_forward_folds=0)
     assert "error" in out
     assert "egx_data_sync.py" in json.dumps(out)
 

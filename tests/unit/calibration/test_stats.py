@@ -48,6 +48,30 @@ class TestWilsonInterval:
         lo, hi = stats.wilson_interval(20, 20)
         assert lo < 1.0 and hi == 1.0 and lo > 0.8
 
+    def test_matches_the_textbook_wilson_formula(self) -> None:
+        # Independent check: the closed-form Wilson score interval written out here.
+        import math
+
+        def textbook(k: int, n: int, z: float) -> tuple[float, float]:
+            p = k / n
+            denom = 1 + z * z / n
+            centre = (p + z * z / (2 * n)) / denom
+            half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denom
+            return centre - half, centre + half
+
+        rng = random.Random(7)
+        for _ in range(300):
+            n = rng.randint(1, 400)
+            k = rng.randint(0, n)
+            lo, hi = stats.wilson_interval(k, n, z=1.96)
+            exp_lo, exp_hi = textbook(k, n, 1.96)
+            assert lo == pytest.approx(max(0.0, exp_lo), abs=1e-9)
+            assert hi == pytest.approx(min(1.0, exp_hi), abs=1e-9)
+
+    def test_boundaries_are_exact_not_float_noise(self) -> None:
+        assert stats.wilson_interval(0, 15)[0] == 0.0
+        assert stats.wilson_interval(15, 15)[1] == 1.0
+
     def test_no_observations_means_no_interval(self) -> None:
         assert stats.wilson_interval(0, 0) is None
 
@@ -124,6 +148,18 @@ class TestPermutationP:
 
 
 class TestBenjaminiHochberg:
+    def test_known_answer_by_hand(self) -> None:
+        # Sorted: 0.005, 0.01, 0.03, 0.04 with m=4. Raw q: 0.02, 0.02, 0.04, 0.04.
+        # Monotone step-up keeps these; output is in the input order.
+        qs = stats.benjamini_hochberg([0.01, 0.04, 0.03, 0.005])
+        assert qs == pytest.approx([0.02, 0.04, 0.04, 0.02])
+
+    def test_q_values_never_below_their_p_values(self) -> None:
+        rng = random.Random(3)
+        ps = [rng.random() for _ in range(50)]
+        for p, q in zip(ps, stats.benjamini_hochberg(ps)):
+            assert q >= p - 1e-12
+
     def test_worked_example(self) -> None:
         assert stats.benjamini_hochberg([0.01, 0.04]) == pytest.approx([0.02, 0.04])
 

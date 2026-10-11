@@ -43,7 +43,7 @@ PARAMS = {"symbols": "SYM0,SYM1,SYM2,SYM3,SYM4,SYM5", "lookback_days": 3000, "ma
 
 class TestRefusals:
     def test_empty_store_returns_no_data_with_the_command_to_run(self, tmp_path, monkeypatch) -> None:
-        from tradingview_mcp.core.services.egx_calibration_service import egx_signal_calibration
+        from tradingview_mcp.core.services.egx_calibration_service import egx_event_study
 
         empty = DataLayer(
             transport=FakeTransport(),
@@ -53,22 +53,22 @@ class TestRefusals:
         )
         monkeypatch.setattr("tradingview_mcp.core.data.factory.get_layer", lambda: empty)
         try:
-            payload = egx_signal_calibration(symbols="NOPE1,NOPE2")
+            payload = egx_event_study(symbols="NOPE1,NOPE2")
         finally:
             empty.close()
         assert payload["error"]["code"] == "NO_DATA"
         assert "egx_data_sync.py" in payload["error"]["message"]
 
     def test_unknown_signal_is_an_invalid_parameter(self, layer) -> None:
-        from tradingview_mcp.core.services.egx_calibration_service import egx_signal_calibration
+        from tradingview_mcp.core.services.egx_calibration_service import egx_event_study
 
-        payload = egx_signal_calibration(signal="not_a_signal", **PARAMS)
+        payload = egx_event_study(signal="not_a_signal", **PARAMS)
         assert payload["error"]["code"] == "INVALID_PARAMETER"
 
     def test_unknown_index_is_an_invalid_parameter(self, layer) -> None:
-        from tradingview_mcp.core.services.egx_calibration_service import egx_signal_calibration
+        from tradingview_mcp.core.services.egx_calibration_service import egx_event_study
 
-        payload = egx_signal_calibration(index="EGX999")
+        payload = egx_event_study(index="EGX999")
         assert payload["error"]["code"] == "INVALID_PARAMETER"
 
     @pytest.mark.parametrize(
@@ -83,9 +83,9 @@ class TestRefusals:
         ],
     )
     def test_out_of_range_parameters_are_refused(self, layer, kwargs) -> None:
-        from tradingview_mcp.core.services.egx_calibration_service import egx_signal_calibration
+        from tradingview_mcp.core.services.egx_calibration_service import egx_event_study
 
-        payload = egx_signal_calibration(**{**PARAMS, **kwargs})
+        payload = egx_event_study(**{**PARAMS, **kwargs})
         assert payload["error"]["code"] == "INVALID_PARAMETER"
 
 
@@ -93,17 +93,17 @@ class TestPayload:
     def test_default_batch_measures_every_default_signal(self, layer) -> None:
         from tradingview_mcp.core.services.egx_calibration_service import (
             DEFAULT_SIGNALS,
-            egx_signal_calibration,
+            egx_event_study,
         )
 
-        payload = egx_signal_calibration(permutations=0, walk_forward_folds=0, **PARAMS)
+        payload = egx_event_study(permutations=0, walk_forward_folds=0, **PARAMS)
         assert "error" not in payload
         assert len(payload["measurements"]) == len(DEFAULT_SIGNALS)
 
     def test_measurement_carries_calibrated_fields(self, layer) -> None:
-        from tradingview_mcp.core.services.egx_calibration_service import egx_signal_calibration
+        from tradingview_mcp.core.services.egx_calibration_service import egx_event_study
 
-        payload = egx_signal_calibration(signal="c2", permutations=20, walk_forward_folds=0, **PARAMS)
+        payload = egx_event_study(signal="c2", permutations=20, walk_forward_folds=0, **PARAMS)
         assert "error" not in payload
         row = payload["measurements"][0]
         for key in (
@@ -117,9 +117,9 @@ class TestPayload:
             assert row["hit_rate_ci95"][0] <= row["hit_rate"] <= row["hit_rate_ci95"][1]
 
     def test_scope_is_reported(self, layer) -> None:
-        from tradingview_mcp.core.services.egx_calibration_service import egx_signal_calibration
+        from tradingview_mcp.core.services.egx_calibration_service import egx_event_study
 
-        payload = egx_signal_calibration(signal="c4", permutations=0, walk_forward_folds=0, **PARAMS)
+        payload = egx_event_study(signal="c4", permutations=0, walk_forward_folds=0, **PARAMS)
         scope = payload["measurement"]
         assert scope["symbols_analysed"] == 6
         assert scope["sessions"] >= 250
@@ -127,30 +127,30 @@ class TestPayload:
         assert "block permutation" in scope["method"]
 
     def test_walk_forward_is_attached_when_requested(self, layer) -> None:
-        from tradingview_mcp.core.services.egx_calibration_service import egx_signal_calibration
+        from tradingview_mcp.core.services.egx_calibration_service import egx_event_study
 
-        payload = egx_signal_calibration(
+        payload = egx_event_study(
             signal="c2", permutations=0, walk_forward_folds=2, **PARAMS
         )
         assert isinstance(payload["walk_forward"], dict)
 
     def test_validated_signals_list_is_present(self, layer) -> None:
-        from tradingview_mcp.core.services.egx_calibration_service import egx_signal_calibration
+        from tradingview_mcp.core.services.egx_calibration_service import egx_event_study
 
-        payload = egx_signal_calibration(permutations=0, walk_forward_folds=0, **PARAMS)
+        payload = egx_event_study(permutations=0, walk_forward_folds=0, **PARAMS)
         assert isinstance(payload["validated_signals"], list)
         assert payload["disclaimer"]
 
     def test_offline_mode_is_reported_and_does_not_block_calibration(self, layer, monkeypatch) -> None:
-        from tradingview_mcp.core.services.egx_calibration_service import egx_signal_calibration
+        from tradingview_mcp.core.services.egx_calibration_service import egx_event_study
 
         monkeypatch.setenv("EGX_DATA_OFFLINE", "1")
-        payload = egx_signal_calibration(signal="c4", permutations=0, walk_forward_folds=0, **PARAMS)
+        payload = egx_event_study(signal="c4", permutations=0, walk_forward_folds=0, **PARAMS)
         assert "error" not in payload
         assert payload["mode"] == "offline"
 
     def test_short_history_is_flagged_not_hidden(self, tmp_path, monkeypatch) -> None:
-        from tradingview_mcp.core.services.egx_calibration_service import egx_signal_calibration
+        from tradingview_mcp.core.services.egx_calibration_service import egx_event_study
 
         short = DataLayer(
             transport=FakeTransport(),
@@ -161,7 +161,7 @@ class TestPayload:
         short.store.write_ohlcv("TINY", random_walk(70, seed=1), source="test")
         monkeypatch.setattr("tradingview_mcp.core.data.factory.get_layer", lambda: short)
         try:
-            payload = egx_signal_calibration(
+            payload = egx_event_study(
                 signal="c4", symbols="TINY", lookback_days=3000, permutations=0, walk_forward_folds=0
             )
         finally:
@@ -172,9 +172,9 @@ class TestPayload:
 
 class TestSignalCatalogue:
     def test_lists_signals_with_hypotheses(self, layer) -> None:
-        from tradingview_mcp.core.services.egx_calibration_service import egx_calibration_signals
+        from tradingview_mcp.core.services.egx_calibration_service import egx_list_events
 
-        payload = egx_calibration_signals()
+        payload = egx_list_events()
         assert payload["count"] >= 15
         names = {s["name"] for s in payload["signals"]}
         assert {"c1", "c2", "c3", "c3_legacy", "accumulation_legacy", "distribution_corrected"} <= names

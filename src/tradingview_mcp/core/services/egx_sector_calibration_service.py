@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from tradingview_mcp.core.calibration.glossary import SECTOR_GLOSSARY, attach_glossary
 from tradingview_mcp.core.calibration.sectors import analyze_sectors
 from tradingview_mcp.core.data.egx_sectors import EGX_SECTORS, get_sector
 from tradingview_mcp.core.errors import ErrorCode, make_error
@@ -20,7 +21,7 @@ MAX_PERMUTATIONS = 2000
 MAX_SECTOR_SYMBOLS = 400
 
 
-def egx_sector_calibration(
+def egx_sector_event_study(
     *,
     horizon: int = 5,
     min_members: int = 3,
@@ -84,4 +85,4 @@ def egx_sector_calibration(
         )
     if not payload["validated_rules"]:
         payload["warnings"].append("no sector rule reached VALIDATED: the scanner's labels are not shown to predict outperformance")
-    return payload
+    return attach_glossary(payload, SECTOR_GLOSSARY)

@@ -165,7 +165,7 @@ risk_reward > 2.0 ، POC تحت السعر …)، والمراجعة الشهر�
   • العتبات (20، 2×، 0.7×، 0.8×، 3%، 30) مكتوبة قبل القياس ولم تُضبط على النتائج.
   • الأحداث تُختبر بالدراسة نفسها: دخول فتح t+1، خروج إغلاق t+5، مقارنة بمتوسط
     السوق فى التواريخ نفسها، وتبديل كتل للـp-value، وBH للـq-value.
-  • أداة الحالة لكل رمز: egx_wyckoff_state(symbol). تعرض الأحداث الأخيرة مع حكمها
+  • أداة الحالة لكل رمز: egx_symbol_events(symbol). تعرض الأحداث الأخيرة مع حكمها
     المُقاس. الرد حالة مُقاسة، لا توصية شراء أو حجم مركز.
 
 نتائج التحكم الصناعى (20 بذرة، horizon 5، permutations 200، alpha 0.10):
@@ -208,7 +208,7 @@ risk_reward > 2.0 ، POC تحت السعر …)، والمراجعة الشهر�
 
 تشغيل المحرك الثانى:
     # أداة MCP (قراءة فقط): حالة رمز واحد
-    egx_wyckoff_state(symbol="COMI", lookback_sessions=5)
+    egx_symbol_events(symbol="COMI", lookback_sessions=5)
     # قياس الأحداث الأربعة على المخزن
     python scripts/egx_calibrate.py --signals wy_selling_climax,wy_spring,wy_no_supply,wy_secondary_test
     python scripts/egx_calibrate.py --list   # تُدرج الأحداث بنوع wyckoff
@@ -216,8 +216,8 @@ risk_reward > 2.0 ، POC تحت السعر …)، والمراجعة الشهر�
 كيف تُشغَّل
 ──────────
     # أدوات MCP (قراءة فقط، تعمل بدون شبكة):
-    egx_signal_calibration(signal="accumulation_corrected", horizon=5)
-    egx_calibration_signals()          # قائمة الشروط وفرضياتها
+    egx_event_study(signal="accumulation_corrected", horizon=5)
+    egx_list_events()          # قائمة الشروط وفرضياتها
     egx_accumulation_fingerprint("COMI")   # وصف الحالة + جودة البيانات المُقاسة
 
     # سطر أوامر:
@@ -226,7 +226,7 @@ risk_reward > 2.0 ، POC تحت السعر …)، والمراجعة الشهر�
     python scripts/egx_calibrate.py --signals c2,c3 --json out.json --markdown out.md
     python scripts/egx_data_sync.py fingerprint COMI    # وصف الحالة لرمز واحد
 
-    # القطاعات (قراءة فقط عبر MCP: egx_sector_calibration)
+    # القطاعات (قراءة فقط عبر MCP: egx_sector_event_study)
     python scripts/egx_calibrate.py --sectors --horizon 5 --permutations 200 --folds 3
     python scripts/egx_calibrate.py --sectors --cost 0.005 --json sectors.json   # تكلفة ذهاب وإياب تضعها أنت
 

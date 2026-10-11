@@ -2,7 +2,7 @@
 
 The events themselves are defined in ``core.analysis.wyckoff``. Their historical
 verdicts come from the same calibration run that measures every other signal
-(``egx_signal_calibration``), so no statistic is computed twice.
+(``egx_event_study``), so no statistic is computed twice.
 
 The reply is a *measured state*, never a trade instruction. A VALIDATED event
 means it survived the calibration on this store's sample; it is not a forecast,
@@ -17,12 +17,13 @@ from datetime import date
 from typing import Any
 
 from tradingview_mcp.core.analysis import wyckoff
+from tradingview_mcp.core.calibration.glossary import WYCKOFF_GLOSSARY
 from tradingview_mcp.core.calibration.signals import WYCKOFF_CONDITIONS
 from tradingview_mcp.core.errors import ErrorCode, make_error
 from tradingview_mcp.core.services.egx_calibration_service import (
     DEFAULT_MAX_SYMBOLS,
     _load_bars,
-    egx_signal_calibration,
+    egx_event_study,
 )
 
 _SYMBOL = re.compile(r"^[A-Z0-9.\-]{1,12}$")
@@ -33,7 +34,7 @@ def _event_flags(bars: list[dict], event: str) -> list:
     return wyckoff.FLAG_BUILDERS[event](bars)
 
 
-def egx_wyckoff_state(
+def egx_symbol_events(
     *,
     symbol: str,
     lookback_sessions: int = 5,
@@ -51,7 +52,7 @@ def egx_wyckoff_state(
         return make_error(ErrorCode.INVALID_PARAMETER, "lookback_sessions must be 1-20", lookback_sessions=lookback_sessions)
 
     # Calibration over the stored universe: one run, every Wyckoff event.
-    calibration = egx_signal_calibration(
+    calibration = egx_event_study(
         signal=",".join(WYCKOFF_CONDITIONS),
         horizon=horizon,
         index=index,
@@ -123,6 +124,7 @@ def egx_wyckoff_state(
         "calibration_universe": calibration.get("measurement", {}).get("symbols_analysed"),
         "calibration_sessions": calibration.get("measurement", {}).get("sessions"),
         "definitions": wyckoff.DEFINITIONS,
+        "glossary": dict(WYCKOFF_GLOSSARY),
         "warnings": warnings,
         "disclaimer": (
             "A measured state, not a trade instruction. Verdicts describe the stored sample's "

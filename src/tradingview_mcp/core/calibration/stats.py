@@ -101,19 +101,26 @@ def describe(values: Sequence[float]) -> dict[str, Optional[float]]:
 
 
 def wilson_interval(successes: int, n: int, *, z: float = 1.96) -> Optional[tuple[float, float]]:
-    """Wilson score interval for a binomial proportion.
+    """Wilson score interval for a binomial proportion (statsmodels).
 
     Preferred over the normal approximation for the sample sizes this project
     actually sees: a signal that fired 12 times with 9 wins has a genuine
     uncertainty that ``p ± 1.96·sqrt(p(1-p)/n)`` hides (it can even cross 1.0).
+    ``z`` is kept for compatibility with earlier callers; ``alpha`` is derived
+    from it, so the interval is identical to the textbook formula at that z.
     """
     if n <= 0:
         return None
-    phat = successes / n
-    denom = 1 + z * z / n
-    center = (phat + z * z / (2 * n)) / denom
-    half = (z * math.sqrt(phat * (1 - phat) / n + z * z / (4 * n * n))) / denom
-    return (max(0.0, center - half), min(1.0, center + half))
+    from scipy.stats import norm
+    from statsmodels.stats.proportion import proportion_confint
+
+    alpha = 2.0 * float(norm.sf(z))
+    lo, hi = proportion_confint(successes, n, alpha=alpha, method="wilson")
+    # At k=0 or k=n the Wilson bounds are exactly 0 and 1; the library can return
+    # 1-1e-16 there, so pin the boundary rather than report float noise.
+    lo = 0.0 if successes == 0 else max(0.0, float(lo))
+    hi = 1.0 if successes == n else min(1.0, float(hi))
+    return (lo, hi)
 
 
 # ── resampling ──────────────────────────────────────────────────────────────
@@ -238,27 +245,23 @@ def permutation_p_hit(
 
 
 def benjamini_hochberg(p_values: Sequence[Optional[float]]) -> list[Optional[float]]:
-    """Benjamini–Hochberg FDR q-values, order-preserving.
+    """Benjamini–Hochberg FDR q-values, order-preserving (statsmodels ``fdr_bh``).
 
     Testing twenty conditions on one price history will always produce a
-    "significant" one by chance. BH is the standard fix: it turns raw p-values
-    into q-values that can be read as "share of false discoveries if I call
-    this set significant". A condition with p=0.04 out of twenty tested is not
-    0.04 of evidence.
+    "significant" one by chance. BH turns raw p-values into q-values that can be
+    read as "share of false discoveries if I call this set significant". A
+    condition with p=0.04 out of twenty tested is not 0.04 of evidence.
+    Entries that are None (no test was run) stay None and do not count as tests.
     """
-    indexed = [(i, p) for i, p in enumerate(p_values) if p is not None]
+    from statsmodels.stats.multitest import multipletests
+
     out: list[Optional[float]] = [None] * len(p_values)
-    m = len(indexed)
-    if m == 0:
+    indexed = [(i, float(p)) for i, p in enumerate(p_values) if p is not None]
+    if not indexed:
         return out
-    ranked = sorted(indexed, key=lambda t: t[1])  # type: ignore[arg-type,return-value]
-    running = 1.0
-    # Walk from the largest p-value down, enforcing monotonicity.
-    for rank_from_end, (idx, p) in enumerate(reversed(ranked), start=1):
-        k = m - rank_from_end + 1
-        q = min(running, p * m / k)  # type: ignore[operator]
-        running = q
-        out[idx] = min(1.0, q)
+    _, adjusted, _, _ = multipletests([p for _, p in indexed], method="fdr_bh")
+    for (i, _), q in zip(indexed, adjusted):
+        out[i] = min(1.0, float(q))
     return out
 
 

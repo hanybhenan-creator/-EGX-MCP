@@ -204,9 +204,9 @@ def test_state_reports_recent_climax_with_its_measured_verdict(monkeypatch):
     bars = _symbol_bars_with_climax()
     today = date.today().isoformat()
     bars[-1]["date"] = today
-    monkeypatch.setattr(svc, "egx_signal_calibration", lambda **kw: _fake_calibration())
+    monkeypatch.setattr(svc, "egx_event_study", lambda **kw: _fake_calibration())
     monkeypatch.setattr(svc, "_load_bars", lambda symbols, *, lookback_days, max_symbols: ({"COMI": bars}, []))
-    out = svc.egx_wyckoff_state(symbol="comi", lookback_sessions=3)
+    out = svc.egx_symbol_events(symbol="comi", lookback_sessions=3)
     assert "error" not in out
     assert out["state"] == "EVENT_FIRED"
     assert out["symbol"] == "COMI"
@@ -218,22 +218,22 @@ def test_state_reports_recent_climax_with_its_measured_verdict(monkeypatch):
 
 def test_state_reports_no_event_when_nothing_fired(monkeypatch):
     bars = base(60)
-    monkeypatch.setattr(svc, "egx_signal_calibration", lambda **kw: _fake_calibration("REJECTED"))
+    monkeypatch.setattr(svc, "egx_event_study", lambda **kw: _fake_calibration("REJECTED"))
     monkeypatch.setattr(svc, "_load_bars", lambda symbols, *, lookback_days, max_symbols: ({"COMI": bars}, []))
-    out = svc.egx_wyckoff_state(symbol="COMI", lookback_sessions=5)
+    out = svc.egx_symbol_events(symbol="COMI", lookback_sessions=5)
     assert out["state"] == "NO_RECENT_EVENT"
     assert out["recent_events"] == []
 
 
 def test_state_rejects_bad_symbol_and_window():
-    assert "error" in svc.egx_wyckoff_state(symbol="COMI; DROP")
-    assert "error" in svc.egx_wyckoff_state(symbol="COMI", lookback_sessions=0)
+    assert "error" in svc.egx_symbol_events(symbol="COMI; DROP")
+    assert "error" in svc.egx_symbol_events(symbol="COMI", lookback_sessions=0)
 
 
 def test_state_reports_no_data(monkeypatch):
-    monkeypatch.setattr(svc, "egx_signal_calibration", lambda **kw: _fake_calibration())
+    monkeypatch.setattr(svc, "egx_event_study", lambda **kw: _fake_calibration())
     monkeypatch.setattr(svc, "_load_bars", lambda symbols, *, lookback_days, max_symbols: ({}, []))
-    out = svc.egx_wyckoff_state(symbol="COMI")
+    out = svc.egx_symbol_events(symbol="COMI")
     assert "error" in out
     assert "daily" in str(out)
 

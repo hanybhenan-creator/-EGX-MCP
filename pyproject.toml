@@ -30,6 +30,10 @@ dependencies = [
   # `uv pip install --system .` ignores uv.lock). Moving to the 2.x SDK
   # (FastMCP -> MCPServer) is a deliberate migration, not a drive-by resolve.
   "mcp[cli]>=1.14.0,<2",
+  # BSD-3 licences. Used for the Wilson interval, Benjamini-Hochberg and
+  # (via scipy) the normal quantile; replaces hand-written versions.
+  "scipy>=1.11",
+  "statsmodels>=0.14",
   # Declared directly, not just inherited via tradingview-screener: server.py
   # imports pandas at module top (the issue #91 preload). If the screener pin
   # ever changes or drops pandas, an undeclared transitive dep would break
