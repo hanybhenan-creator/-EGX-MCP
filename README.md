@@ -498,7 +498,7 @@ Example prompt: "Compare all 9 strategies on MSFT for 2 years"
 | **Binance** | Crypto screener, all pairs |
 | **KuCoin / Bybit+** | Crypto screener |
 | **NASDAQ / NYSE** | US stocks (AAPL, TSLA, NVDA...) |
-| **EGX (Egypt)** | `egx_market_overview`, `egx_stock_screener`, `egx_trade_plan`, `egx_fibonacci_retracement`, `egx_data_status` (data-layer health, coverage, freshness), `egx_event_study` / `egx_list_events` (measured, corrected signal statistics), `egx_accumulation_fingerprint` (institutional footprint + measured data-quality score), `egx_sector_event_study` (does the sector scanner's Hot/Cold ranking predict anything, measured against the same-date sector average) , `egx_symbol_events` (recent Wyckoff/VSA accumulation events on a stock, with their measured verdicts; a measured state, not a trade instruction) |
+| **EGX (Egypt)** | `egx_market_overview`, `egx_stock_screener`, `egx_price_levels`, `egx_fibonacci_retracement`, `egx_data_status` (data-layer health, coverage, freshness), `egx_event_study` / `egx_list_events` (measured, corrected signal statistics), `egx_accumulation_fingerprint` (institutional footprint + measured data-quality score), `egx_sector_event_study` (does the sector scanner's Hot/Cold ranking predict anything, measured against the same-date sector average) , `egx_symbol_events` (recent Wyckoff/VSA accumulation events on a stock, with their measured verdicts; a measured state, not a trade instruction) |
 | **Turkish (BIST)** | Via TradingView screener |
 | **Europe & Canada** | Euronext (Paris, Amsterdam, Brussels, Lisbon), LSE, Xetra, Frankfurt, Milan, SIX, Madrid, TSX, TSX Venture |
 | **India & Indonesia** | NSE, BSE (NIFTY, BANKNIFTY, SENSEX), IDX (Jakarta Composite) |

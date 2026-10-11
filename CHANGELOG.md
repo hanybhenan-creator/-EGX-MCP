@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **`egx_price_levels`** replaces `egx_trade_plan`. It reports the current
+  indicator readings, candidate support and resistance levels, and the distance
+  to the nearest level on each side. It no longer returns a recommendation,
+  entry, stop-loss, target, risk-reward ratio, composite grade, or the upstream
+  TradingView buy/sell label, because none of these was calibrated.
+- **`AGENTS.md`** (rules and commands for OpenCode) and
+  `docs/PLATFORM_GAP_ANALYSIS.md` (the master prompt mapped to the repository).
+
+### Removed
+- `egx_accumulation_detector.py`: not imported anywhere, and it depended on
+  `yfinance`, which is not a declared dependency. Its functions were not
+  calibrated and returned trade targets.
+
 - **Wyckoff / VSA accumulation events, calibrated** (`core.analysis.wyckoff`,
   four conditions `wy_selling_climax`, `wy_spring`, `wy_no_supply`,
   `wy_secondary_test`, registered in the signal registry and measured by the

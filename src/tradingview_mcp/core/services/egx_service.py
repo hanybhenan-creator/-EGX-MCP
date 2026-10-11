@@ -18,7 +18,6 @@ from tradingview_mcp.core.services.indicators import (
     extract_extended_indicators,
     compute_stock_score,
     compute_trade_setup,
-    compute_trade_quality,
     compute_fibonacci_levels,
     analyze_fibonacci_position,
     detect_trend_for_fibonacci,
@@ -882,16 +881,23 @@ def screen_egx_stocks(
 
 # ── Trade Plan ─────────────────────────────────────────────────────────────────
 
-def generate_egx_trade_plan(symbol: str, timeframe: str = "1D") -> dict:
+def generate_egx_price_levels(symbol: str, timeframe: str = "1D") -> dict:
     """
-    Generate a full trade plan for a specific EGX stock.
+    Price readings and candidate price levels for one EGX stock.
+
+    Reports what the indicators show now: price, change, RSI, MACD, ADX, volume,
+    moving averages, Bollinger bands, traded value, and candidate support and
+    resistance levels. It deliberately does NOT produce a recommendation, entry,
+    stop-loss, target, risk-reward ratio, composite grade or any third-party
+    buy/sell label: those were not calibrated against outcomes.
 
     Args:
         symbol:    EGX stock symbol (e.g. 'COMI'). Will be prefixed with EGX:.
         timeframe: TradingView interval (default '1D').
 
     Returns:
-        Complete plan: stock score, setup, stop-loss, targets, quality, and S/R.
+        Readings, candidate levels with distances from the current price, and
+        a note on how each figure was produced.
     """
     from tradingview_mcp.core.data.egx_sectors import get_sector, get_currency
 
@@ -910,13 +916,12 @@ def generate_egx_trade_plan(symbol: str, timeframe: str = "1D") -> dict:
         return {"error": f"No data found for {full_symbol}"}
 
     ind = analysis[full_symbol].indicators
-    # Backfill ATR before compute_trade_setup (stop-loss = close - 1.5*atr)
-    # and compute_stock_score (10pt ATR% band) and extract_extended_indicators.
     if ind.get("ATR") is None:
         from tradingview_mcp.core.services.screener_provider import fetch_atr_for_ticker
         atr_value = fetch_atr_for_ticker(full_symbol, screener, timeframe)
         if atr_value is not None:
             ind["ATR"] = atr_value
+
     metrics = compute_metrics(ind)
     if not metrics:
         return {"error": f"Could not compute metrics for {full_symbol}"}
@@ -924,70 +929,61 @@ def generate_egx_trade_plan(symbol: str, timeframe: str = "1D") -> dict:
     ccy = get_currency(full_symbol)
     score_result = compute_stock_score(ind, currency=ccy)
     if not score_result:
-        return {"error": f"Could not compute stock score for {full_symbol}"}
+        return {"error": f"Could not compute readings for {full_symbol}"}
 
+    # Candidate levels come from the same routine the scanner uses. Only the level
+    # lists are kept; its entry, stop and target fields are not part of this output.
     setup = compute_trade_setup(ind)
-    quality = compute_trade_quality(ind, setup) if setup else None
+    supports = list(setup["supports"]) if setup else []
+    resistances = list(setup["resistances"]) if setup else []
+    price = metrics["price"]
+    nearest_support = max((s for s in supports if s < price), default=None)
+    nearest_resistance = min((r for r in resistances if r > price), default=None)
+
     extended = extract_extended_indicators(ind)
+    atr = ind.get("ATR")
 
     output: dict = {
         "symbol": full_symbol,
         "sector": get_sector(full_symbol),
         "currency": ccy,
         "timeframe": timeframe,
-        "price": metrics["price"],
+        "price": price,
         "change_pct": score_result["change_pct"],
-        "stock_score": score_result["score"],
-        "grade": score_result["grade"],
-        "trend_state": score_result["trend_state"],
-        "score_breakdown": score_result["breakdown"],
-        "signals": score_result["signals"],
-        "penalties": score_result["penalties"],
+        "readings": {
+            "rsi": extended["rsi"],
+            "macd": extended["macd"],
+            "adx": extended["adx"],
+            "volume": extended["volume"],
+            "moving_averages": extended["ema"],
+            "bollinger_bands": extended["bollinger_bands"],
+            "atr": atr,
+            "atr_pct_of_price": round(atr / price * 100, 2) if atr and price else None,
+        },
         "liquidity": score_result.get("liquidity", {}),
-        "rsi": extended["rsi"],
-        "macd": extended["macd"],
-        "adx": extended["adx"],
-        "volume": extended["volume"],
-        "ema": extended["ema"],
-        "bollinger_bands": extended["bollinger_bands"],
-        "tv_recommendation": extended["tv_recommendation"],
+        "candidate_levels": {
+            "support_levels": supports,
+            "resistance_levels": resistances,
+            "nearest_support": nearest_support,
+            "nearest_resistance": nearest_resistance,
+            "distance_to_nearest_support_pct": (
+                round((price - nearest_support) / price * 100, 2) if nearest_support and price else None
+            ),
+            "distance_to_nearest_resistance_pct": (
+                round((nearest_resistance - price) / price * 100, 2) if nearest_resistance and price else None
+            ),
+        },
+        "how_to_read": (
+            "Readings are current indicator values from the public TradingView screener. "
+            "Candidate levels are combined from pivot, moving-average, Fibonacci and Bollinger "
+            "sources. None of these readings has been calibrated against later price moves. "
+            "Use egx_event_study for measured hit rates of the stored EGX conditions."
+        ),
+        "not_a_recommendation": (
+            "This tool reports readings and levels only. It does not recommend buying, selling, "
+            "entering, exiting or sizing a position."
+        ),
     }
-
-    if setup:
-        output["trade_setup"] = {
-            "setup_types": setup["setup_types"],
-            "entry_points": setup["entry_points"],
-            "stop_loss": setup["stop_loss"],
-            "stop_distance_pct": setup["stop_distance_pct"],
-            "targets": setup["targets"],
-            "risk_reward": setup["risk_reward"],
-            "scenarios": setup.get("scenarios", {}),
-            "primary_scenario": setup.get("primary_scenario"),
-            "supports": setup["supports"],
-            "resistances": setup["resistances"],
-        }
-
-    if quality:
-        output["trade_quality_score"] = quality["trade_quality_score"]
-        output["trade_quality"] = quality["quality"]
-        output["trade_quality_breakdown"] = quality["breakdown"]
-        output["trade_notes"] = quality["notes"]
-
-    ss = score_result["score"]
-    tq = quality["trade_quality_score"] if quality else 0
-    rr2 = setup["risk_reward"]["to_target_2"] if setup else 0
-
-    if ss >= 70 and tq >= 65 and rr2 and rr2 >= 2.0:
-        recommendation = "QUALIFIED — Strong stock with actionable setup"
-    elif ss >= 70 and tq >= 50:
-        recommendation = "CONDITIONAL — Good stock but setup needs improvement"
-    elif ss >= 55:
-        recommendation = "WATCHLIST — Monitor for better entry"
-    else:
-        recommendation = "AVOID — Does not meet momentum/quality criteria"
-
-    output["recommendation"] = recommendation
-    output["disclaimer"] = "For educational/informational purposes only. Not financial advice."
     return output
 
 

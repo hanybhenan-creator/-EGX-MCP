@@ -49,7 +49,7 @@ from tradingview_mcp.core.services.egx_service import (
     run_egx_sector_scanner,
     analyze_egx_index,
     screen_egx_stocks,
-    generate_egx_trade_plan,
+    generate_egx_price_levels,
     analyze_egx_fibonacci,
 )
 from tradingview_mcp.core.services.marketaux_service import (
@@ -578,19 +578,28 @@ def egx_stock_screener(
         return exception_to_envelope(e, context="egx_stock_screener")
 
 
-@mcp.tool(annotations=ToolAnnotations(title="EGX Trade Plan", readOnlyHint=True, destructiveHint=False, openWorldHint=True))
-def egx_trade_plan(symbol: str, timeframe: str = "1D") -> dict:
-    """Generate a full trade plan for a specific EGX stock.
+@mcp.tool(annotations=ToolAnnotations(title="EGX Price Levels", readOnlyHint=True, destructiveHint=False, openWorldHint=True))
+def egx_price_levels(symbol: str, timeframe: str = "1D") -> dict:
+    """Current indicator readings and candidate support and resistance levels for one EGX stock.
+
+    Returns the price, change, RSI, MACD, ADX, volume, moving averages, Bollinger bands,
+    ATR, traded value, candidate support and resistance levels, and the distance from
+    the price to the nearest level on each side.
+
+    It does NOT give a buy or sell recommendation, an entry, a stop-loss, a target or a
+    risk-reward ratio. Those were removed because they were not calibrated against later
+    price moves. To see how the stored EGX conditions performed historically, use
+    egx_event_study.
 
     Args:
-        symbol: EGX stock symbol (e.g., "COMI", "TMGH", "FWRY")
-        timeframe: One of 5m, 15m, 1h, 4h, 1D, 1W, 1M (default 1D)
+        symbol: EGX stock symbol, e.g. "COMI", "TMGH", "FWRY".
+        timeframe: One of 5m, 15m, 1h, 4h, 1D, 1W, 1M (default 1D).
     """
     try:
         timeframe = validate_timeframe(timeframe, "1D")
-        return generate_egx_trade_plan(symbol, timeframe)
+        return generate_egx_price_levels(symbol, timeframe)
     except Exception as e:
-        return exception_to_envelope(e, context="egx_trade_plan")
+        return exception_to_envelope(e, context="egx_price_levels")
 
 
 @mcp.tool(annotations=ToolAnnotations(title="EGX Fibonacci Retracement", readOnlyHint=True, destructiveHint=False, openWorldHint=True))
